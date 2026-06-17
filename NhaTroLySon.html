@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Nhà trọ Lý Sơn</title>
+<style>
+:root{
+  --primary:#0d6efd; --primary-dark:#0a58ca; --primary-light:#e7f1ff;
+  --ktx:#0ea5e9; --tro:#16a34a;
+  --bg:#f4f6fb; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+  --border:#e5e7eb; --danger:#dc2626; --danger-light:#fee2e2;
+  --warn:#d97706; --ok:#16a34a; --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5;font-size:15px;-webkit-text-size-adjust:100%}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:16px}
+a{color:var(--primary)}
+
+.app{max-width:960px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:30;background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+  color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)}
+.topbar .ttl{font-weight:700;font-size:18px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .sub{font-size:12px;opacity:.85;font-weight:400}
+.iconbtn{background:rgba(255,255,255,.18);border:none;color:#fff;width:38px;height:38px;border-radius:10px;
+  font-size:18px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.iconbtn:active{background:rgba(255,255,255,.32)}
+.content{flex:1;padding:16px;padding-bottom:40px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:10px;
+  padding:11px 16px;font-weight:600;background:var(--primary);color:#fff;transition:.15s}
+.btn:active{transform:scale(.97)}
+.btn.block{display:flex;width:100%}
+.btn.lg{padding:15px 18px;font-size:16px}
+.btn.ghost{background:var(--primary-light);color:var(--primary-dark)}
+.btn.sec{background:#eef0f4;color:var(--text)}
+.btn.danger{background:var(--danger)}
+.btn.ok{background:var(--ok)}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.grid2{grid-template-columns:1fr}}
+.muted{color:var(--muted)}.center{text-align:center}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge.ktx{background:#e0f2fe;color:#0369a1}.badge.tro{background:#dcfce7;color:#15803d}
+.badge.warn{background:#fef3c7;color:#92400e}.badge.ok{background:#dcfce7;color:#15803d}.badge.danger{background:var(--danger-light);color:#991b1b}
+.empty{text-align:center;padding:42px 16px;color:var(--muted)}.empty .ic{font-size:46px;margin-bottom:8px}
+.sectitle{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:16px 2px 10px}
+
+.hero{text-align:center;padding:30px 10px 14px}
+.hero .logo{width:78px;height:78px;border-radius:22px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+  color:#fff;font-size:38px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:var(--shadow)}
+.hero h1{margin:0;font-size:26px}.hero p{margin:4px 0 0;color:var(--muted)}
+
+.hcard{display:flex;align-items:center;gap:14px;cursor:pointer}
+.hcard .av{width:50px;height:50px;border-radius:12px;background:var(--primary-light);color:var(--primary-dark);
+  font-size:24px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.hcard .info{flex:1;min-width:0}
+.hcard .info .nm{font-weight:700;font-size:16px}
+.hcard .info .ad{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hcard .chev{color:var(--muted);font-size:20px}
+
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border);
+  position:sticky;top:66px;z-index:20;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:9px 15px;border-radius:999px;background:#f1f3f7;color:var(--muted);font-weight:600;font-size:14px;border:none;white-space:nowrap}
+.tab.active{background:var(--primary);color:#fff}
+
+.field{margin-bottom:13px}
+.field label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}
+.field .req{color:var(--danger)}
+.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;outline:none;transition:.15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.field .hint{font-size:12px;color:var(--muted);margin-top:4px}
+.inline-list{border:1px dashed var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+.chiprow{display:flex;align-items:center;gap:8px;margin-bottom:8px}.chiprow:last-child{margin-bottom:0}
+.chiprow input,.chiprow select{padding:9px 10px}
+.delx{background:var(--danger-light);color:var(--danger);border:none;border-radius:8px;width:36px;height:38px;flex:0 0 auto;font-size:16px}
+
+/* image / signature fields */
+.imgslot{border:1px solid var(--border);border-radius:10px;background:#f8fafc;min-height:96px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px}
+.imgslot img{max-width:100%;max-height:180px;display:block}
+.imgslot.sig{background:#fffef5}
+.imgph{color:var(--muted);font-size:13px;padding:24px}
+.imgph.small{padding:10px;min-height:40px;display:flex;align-items:center;justify-content:center}
+.imgbtns{display:flex;gap:8px}.imgbtns .btn{flex:1}
+.sigimg{max-width:100%;max-height:140px;background:#fff;border:1px solid var(--border);border-radius:8px}
+.docrow{display:flex;gap:8px;margin:8px 0}
+.docell{flex:1;text-align:center}
+.docthumb{width:100%;height:74px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:#fff}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:#fff}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:#f8fafc;font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);position:sticky;top:0}
+tr:last-child td{border-bottom:none}
+.roomhead td{background:var(--primary-light);font-weight:700;color:var(--primary-dark)}
+.linkbtn{background:none;border:none;color:var(--primary);font-weight:600;text-decoration:underline;padding:0}
+
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:.2s}
+.modal-bg.show{opacity:1;pointer-events:auto}
+.modal{background:#fff;width:100%;max-width:620px;border-radius:18px 18px 0 0;max-height:92vh;overflow:auto;transform:translateY(20px);transition:.2s}
+.modal-bg.show .modal{transform:translateY(0)}
+@media(min-width:620px){.modal-bg{align-items:center}.modal{border-radius:18px}}
+.modal-head{position:sticky;top:0;background:#fff;padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;z-index:2}
+.modal-head .mt{font-weight:700;font-size:17px;flex:1}
+.modal-body{padding:18px}
+.modal-foot{position:sticky;bottom:0;background:#fff;padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:10px}
+.modal-foot .btn{flex:1}
+.closex{background:#f1f3f7;border:none;width:34px;height:34px;border-radius:9px;font-size:18px;color:var(--muted)}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;z-index:500;opacity:0;transition:.25s;font-size:14px;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--danger)}.toast.ok{background:var(--ok)}
+
+.placeholder-tab{text-align:center;padding:50px 20px;color:var(--muted)}.placeholder-tab .ic{font-size:54px;margin-bottom:10px}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid var(--border)}.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);font-size:13px}.kv .v{font-weight:600;text-align:right}
+.subbar{display:flex;gap:10px;margin-bottom:14px}.subbar .btn{flex:1}
+
+/* signature pad overlay */
+.sig-overlay{position:fixed;inset:0;background:#0b1324;z-index:300;display:none;flex-direction:column}
+.sig-overlay.show{display:flex}
+.sig-bar{display:flex;align-items:center;gap:10px;padding:12px 14px;color:#fff;background:#111c33}
+.sig-bar #sigTitle{flex:1;font-weight:700}
+.sig-actions{display:flex;gap:8px}
+#sigCanvas{flex:1;background:#fff;touch-action:none;display:block;margin:10px;border-radius:10px}
+.sig-hint{color:#9fb3d1;text-align:center;padding:0 0 14px;font-size:13px}
+
+/* image viewer */
+.imgviewer{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:400;display:none;align-items:center;justify-content:center;padding:16px}
+.imgviewer.show{display:flex}
+.imgviewer img{max-width:96%;max-height:92%;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar" id="topbar"></div>
+  <div id="tabsHost"></div>
+  <div class="content" id="content"></div>
+</div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+
+<div class="sig-overlay" id="sigOverlay">
+  <div class="sig-bar"><span id="sigTitle">Ký tên</span>
+    <div class="sig-actions">
+      <button class="btn sec sm" onclick="sigClear()">Xoá</button>
+      <button class="btn sec sm" onclick="closeSig()">Huỷ</button>
+      <button class="btn ok sm" onclick="sigSave()">✓ Lưu</button>
+    </div></div>
+  <canvas id="sigCanvas"></canvas>
+  <div class="sig-hint">Dùng ngón tay hoặc chuột ký vào khung trắng</div>
+</div>
+
+<div class="imgviewer" id="imgViewer" onclick="this.classList.remove('show')"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   NHÀ TRỌ LÝ SƠN — single-file web app
+   STORE = lớp lưu trữ; SYNC = đồng bộ Google Sheet/Drive (Apps Script)
+   ============================================================ */
+
+/* ---------- STORE ---------- */
+const STORE = (function(){
+  const KEY='nhaTroLySon_v1';
+  let data={houses:[]};
+  function load(){try{const r=localStorage.getItem(KEY);if(r)data=JSON.parse(r);}catch(e){}if(!data.houses)data.houses=[];}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){toast('Bộ nhớ đầy — hãy đồng bộ rồi thử lại','err');}}
+  load();
+  return {
+    all:()=>data, houses:()=>data.houses,
+    house:(id)=>data.houses.find(h=>h.id===id),
+    addHouse:(h)=>{data.houses.push(h);save();},
+    updateHouse:(id,p)=>{const h=data.houses.find(x=>x.id===id);if(h){Object.assign(h,p);save();}},
+    removeHouse:(id)=>{data.houses=data.houses.filter(h=>h.id!==id);save();},
+    save, export:()=>JSON.stringify(data,null,2),
+    import:(j)=>{data=JSON.parse(j);if(!data.houses)data.houses=[];save();}
+  };
+})();
+
+/* ---------- helpers ---------- */
+const $=(s,el=document)=>el.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=(n)=>{n=Number(n)||0;return n.toLocaleString('vi-VN')+' ₫';};
+function toast(m,t=''){const e=$('#toast');e.textContent=m;e.className='toast show '+t;clearTimeout(e._t);e._t=setTimeout(()=>e.className='toast',2400);}
+function fmtDate(s){if(!s)return '—';const p=String(s).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s;}
+function fmtMonth(s){if(!s)return '—';const p=String(s).split('-');return p.length>=2?`${p[1]}/${p[0]}`:s;}
+function newImg(){return {imgId:uid(),data:null,url:null};}
+function normalizeImg(o){if(!o||typeof o!=='object')return newImg();if(!o.imgId)o.imgId=uid();if(typeof o.data==='undefined')o.data=null;if(typeof o.url==='undefined')o.url=null;return o;}
+function imgSrc(o){return o?(o.data||o.url||''):'';}
+function imgHas(o){return !!(o&&(o.data||o.url));}
+function blankCust(){return {name:'',dob:'',phone:'',cccd:'',bienso:'',cccdPhoto:newImg(),customerPhoto:newImg(),signature:newImg()};}
+function normalizeCust(c){c.cccdPhoto=normalizeImg(c.cccdPhoto);c.customerPhoto=normalizeImg(c.customerPhoto);c.signature=normalizeImg(c.signature);return c;}
+
+/* ---------- image resize ---------- */
+function fileToResizedDataURL(file,maxW,q){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onerror=()=>rej(new Error('read'));
+    r.onload=()=>{const img=new Image();
+      img.onload=()=>{let w=img.width,h=img.height;if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,w,h);cx.drawImage(img,0,0,w,h);
+        res(cv.toDataURL('image/jpeg',q));};
+      img.onerror=()=>rej(new Error('img'));img.src=r.result;};
+    r.readAsDataURL(file);
+  });
+}
+
+/* ---------- app state ---------- */
+const APP={screen:'entry',houseId:null,tab:'hopdong',hdView:'list'};
+
+/* ---------- MODAL ---------- */
+function openModal({title,bodyHTML,footHTML,onMount}){
+  $('#modal').innerHTML=`<div class="modal-head"><div class="mt">${esc(title)}</div>
+    <button class="closex" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">${bodyHTML}</div>${footHTML?`<div class="modal-foot">${footHTML}</div>`:''}`;
+  $('#modalBg').classList.add('show');
+  if(onMount)onMount($('#modal'));
+}
+function closeModal(){$('#modalBg').classList.remove('show');}
+$('#modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal();});
+
+/* ---------- IMAGE / SIGNATURE FIELD HELPERS ---------- */
+function imgSlotInner(src){return src?`<img src="${src}">`:`<div class="imgph">Chưa có ảnh</div>`;}
+function imgField(key,label,valObj){
+  const pid='prev_'+key.replace(/:/g,'_');
+  return `<div class="field"><label>${label} <span class="req">*</span></label>
+    <div class="imgslot" id="${pid}">${imgSlotInner(imgSrc(valObj))}</div>
+    <div class="imgbtns">
+      <label class="btn sec sm">📷 Chụp<input type="file" accept="image/*" capture="environment" data-imgkey="${key}" hidden></label>
+      <label class="btn sec sm">🖼️ Chọn ảnh<input type="file" accept="image/*" data-imgkey="${key}" hidden></label>
+    </div></div>`;
+}
+function sigField(key,valObj){
+  const pid='prev_'+key.replace(/:/g,'_');
+  return `<div class="field"><label>Chữ ký khách hàng <span class="req">*</span></label>
+    <div class="imgslot sig" id="${pid}">${imgSlotInner(imgSrc(valObj))}</div>
+    <button type="button" class="btn sec sm" onclick="signFor('${key}')">✍️ Ký tên</button></div>`;
+}
+function imgTargetByKey(key){
+  const p=key.split(':');
+  if(p[0]==='ktx')return {obj:window._ctDraft.customer,field:p[1]};
+  if(p[0]==='cust')return {obj:window._ctDraft.customers[+p[1]],field:p[2]};
+  return null;
+}
+function applyImg(key,dataUrl){
+  const t=imgTargetByKey(key);if(!t||!t.obj)return;
+  if(!t.obj[t.field]||typeof t.obj[t.field]!=='object')t.obj[t.field]=newImg();
+  t.obj[t.field].data=dataUrl;t.obj[t.field].url=null;updatePreview(key);
+}
+function updatePreview(key){
+  const t=imgTargetByKey(key);const src=imgSrc(t&&t.obj?t.obj[t.field]:null);
+  const el=document.getElementById('prev_'+key.replace(/:/g,'_'));if(el)el.innerHTML=imgSlotInner(src);
+}
+function signFor(key){
+  openSignaturePad('Khách hàng ký tên',(data)=>{
+    const t=imgTargetByKey(key);if(!t||!t.obj)return;
+    if(!t.obj[t.field]||typeof t.obj[t.field]!=='object')t.obj[t.field]=newImg();
+    t.obj[t.field].data=data;t.obj[t.field].url=null;updatePreview(key);
+  });
+}
+/* delegated listener for all photo inputs */
+document.addEventListener('change',async(e)=>{
+  const inp=e.target;
+  if(inp&&inp.matches&&inp.matches('input[type=file][data-imgkey]')){
+    const f=inp.files&&inp.files[0];if(!f)return;
+    try{const url=await fileToResizedDataURL(f,1100,0.72);applyImg(inp.dataset.imgkey,url);}
+    catch(err){toast('Không đọc được ảnh','err');}
+    inp.value='';
+  }
+});
+
+/* ---------- SIGNATURE PAD ---------- */
+let _sig={ctx:null,drawing:false,has:false,cb:null};
+function openSignaturePad(title,cb){
+  _sig.cb=cb;_sig.has=false;
+  $('#sigTitle').textContent=title||'Ký tên';
+  $('#sigOverlay').classList.add('show');
+  requestAnimationFrame(()=>{
+    const cv=$('#sigCanvas');cv.width=cv.clientWidth;cv.height=cv.clientHeight;
+    const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.lineWidth=2.8;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#0b1324';
+    _sig.ctx=ctx;bindSig(cv);
+  });
+}
+function sigPos(cv,e){const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};}
+function bindSig(cv){
+  cv.onpointerdown=e=>{e.preventDefault();_sig.drawing=true;const p=sigPos(cv,e);_sig.ctx.beginPath();_sig.ctx.moveTo(p.x,p.y);};
+  cv.onpointermove=e=>{if(!_sig.drawing)return;e.preventDefault();const p=sigPos(cv,e);_sig.ctx.lineTo(p.x,p.y);_sig.ctx.stroke();_sig.has=true;};
+  cv.onpointerup=()=>{_sig.drawing=false;};
+  cv.onpointerleave=()=>{_sig.drawing=false;};
+}
+function sigClear(){const cv=$('#sigCanvas');if(!_sig.ctx)return;_sig.ctx.fillStyle='#fff';_sig.ctx.fillRect(0,0,cv.width,cv.height);_sig.has=false;}
+function closeSig(){$('#sigOverlay').classList.remove('show');}
+function sigSave(){if(!_sig.has){toast('Chưa có chữ ký','err');return;}const data=$('#sigCanvas').toDataURL('image/png');closeSig();if(_sig.cb)_sig.cb(data);}
+
+/* ---------- image viewer ---------- */
+function viewImg(src){const v=$('#imgViewer');v.innerHTML='';const img=new Image();img.src=src;v.appendChild(img);v.classList.add('show');}
+
+/* ---------- password gate ---------- */
+function requirePassword(house,actionLabel,cb){
+  openModal({title:'Nhập mật khẩu nhà',
+    bodyHTML:`<p class="muted" style="margin-top:0">Nhà <b>${esc(house.name)}</b> — ${esc(actionLabel)} cần mật khẩu.</p>
+      <div class="field"><label>Mật khẩu</label><input id="pwIn" type="password" autocomplete="off" placeholder="Mật khẩu nhà"></div>
+      <button class="linkbtn" id="pwHintBtn" type="button">Quên mật khẩu?</button>
+      <div id="pwHint" style="display:none;margin-top:8px" class="card">
+        <div class="kv"><span class="k">Câu hỏi gợi ý</span><span class="v">${esc(house.passwordHint||'—')}</span></div></div>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="pwOk">Xác nhận</button>`,
+    onMount:(m)=>{const inp=$('#pwIn',m);inp.focus();
+      $('#pwHintBtn',m).onclick=()=>{$('#pwHint',m).style.display='block';};
+      const go=()=>{if(inp.value===house.password){closeModal();cb();}else toast('Mật khẩu không đúng','err');};
+      $('#pwOk',m).onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go();};}
+  });
+}
+
+/* ============================================================ RENDER ============================================================ */
+function render(){renderTopbar();renderTabs();const c=$('#content');
+  if(APP.screen==='entry')renderEntry(c);
+  else if(APP.screen==='system')renderSystem(c);
+  else if(APP.screen==='house')renderHouse(c);}
+
+function renderTopbar(){const tb=$('#topbar');
+  if(APP.screen==='entry'){tb.innerHTML=`<div class="ttl">Nhà trọ Lý Sơn</div>
+    <button class="iconbtn" title="Đồng bộ Google" onclick="openSync()">☁️</button>
+    <button class="iconbtn" title="Sao lưu" onclick="openBackup()">⋯</button>`;}
+  else if(APP.screen==='system'){tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
+    <div class="ttl">Quản lý hệ thống<div class="sub">Thêm / chỉnh / xoá nhà</div></div>`;}
+  else if(APP.screen==='house'){const h=STORE.house(APP.houseId);
+    tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
+      <div class="ttl">${esc(h?h.name:'')}<div class="sub">${esc(h?h.address:'')}</div></div>
+      <button class="iconbtn" title="Đồng bộ Google" onclick="openSync()">☁️</button>`;}
+}
+function renderTabs(){const host=$('#tabsHost');
+  if(APP.screen!=='house'){host.innerHTML='';return;}
+  const tabs=[['hopdong','Hợp đồng'],['doanhthu','Doanh thu'],['chiphi','Chi phí'],['quyettoan','Quyết toán'],['thongke','Thống kê']];
+  host.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${APP.tab===k?'active':''}" onclick="setTab('${k}')">${l}</button>`).join('')}</div>`;
+}
+
+/* ---------- ENTRY ---------- */
+function renderEntry(c){const houses=STORE.houses();
+  c.innerHTML=`<div class="hero"><div class="logo">🏠</div><h1>Nhà trọ Lý Sơn</h1><p>Quản lý nhà trọ &amp; ký túc xá</p></div>
+    <button class="btn lg block ghost" style="margin-bottom:18px" onclick="goSystem()">⚙️ Quản lý hệ thống</button>
+    <div class="sectitle">Chọn nhà để quản lý</div><div id="houseList"></div>`;
+  const list=$('#houseList',c);
+  if(!houses.length){list.innerHTML=`<div class="empty"><div class="ic">🏚️</div>Chưa có nhà nào.<br>Vào <b>Quản lý hệ thống</b> để thêm nhà.</div>`;return;}
+  list.innerHTML=houses.map(h=>`<div class="card hcard" onclick="enterHouse('${h.id}')">
+    <div class="av">🏠</div><div class="info"><div class="nm">${esc(h.name)}</div><div class="ad">${esc(h.address||'—')}</div>
+      <div style="margin-top:4px"><span class="badge ktx">${h.rooms.filter(r=>r.type==='KTX').length} KTX</span>
+        <span class="badge tro">${h.rooms.filter(r=>r.type==='TRO').length} phòng trọ</span></div></div>
+    <div class="chev">›</div></div>`).join('');
+}
+
+/* ---------- SYSTEM ---------- */
+function renderSystem(c){const houses=STORE.houses();
+  c.innerHTML=`<button class="btn lg block" style="margin-bottom:16px" onclick="houseForm()">＋ Thêm nhà mới</button><div id="sysList"></div>`;
+  const list=$('#sysList',c);
+  if(!houses.length){list.innerHTML=`<div class="empty"><div class="ic">🏚️</div>Chưa có nhà nào.</div>`;return;}
+  list.innerHTML=houses.map(h=>`<div class="card">
+    <div class="hcard" style="cursor:default"><div class="av">🏠</div>
+      <div class="info"><div class="nm">${esc(h.name)}</div><div class="ad">${esc(h.address||'—')}</div></div></div>
+    <div style="margin:10px 0 12px"><span class="badge ktx">${h.rooms.filter(r=>r.type==='KTX').length} KTX</span>
+      <span class="badge tro">${h.rooms.filter(r=>r.type==='TRO').length} phòng trọ</span>
+      <span class="badge warn">HĐ: ${fmtMonth(h.contractStart)}–${fmtMonth(h.contractEnd)}</span>
+      ${imgHas(h.manager&&h.manager.signature)?'<span class="badge ok">Đã ký QL</span>':''}</div>
+    <div class="row">
+      <button class="btn sec sm" onclick="requirePassword(STORE.house('${h.id}'),'Chỉnh sửa nhà',()=>houseForm('${h.id}'))">✏️ Sửa</button>
+      <button class="btn danger sm" onclick="requirePassword(STORE.house('${h.id}'),'Xoá nhà',()=>confirmDeleteHouse('${h.id}'))">🗑️ Xoá</button>
+    </div></div>`).join('');
+}
+function confirmDeleteHouse(id){const h=STORE.house(id);
+  openModal({title:'Xoá nhà',bodyHTML:`<p>Bạn chắc chắn xoá nhà <b>${esc(h.name)}</b> và toàn bộ hợp đồng? Không thể hoàn tác.</p>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn danger" onclick="doDeleteHouse('${id}')">Xoá nhà</button>`});}
+function doDeleteHouse(id){STORE.removeHouse(id);closeModal();toast('Đã xoá nhà','ok');renderSystem($('#content'));}
+
+/* ---------- HOUSE FORM ---------- */
+function houseForm(id){
+  const editing=!!id;
+  const h=editing?JSON.parse(JSON.stringify(STORE.house(id))):{id:uid(),name:'',address:'',rooms:[],
+    manager:{name:'',birthYear:'',signature:newImg()},contractStart:'',contractEnd:'',password:'',passwordHint:'',contracts:[]};
+  if(!h.manager)h.manager={name:'',birthYear:''};h.manager.signature=normalizeImg(h.manager.signature);
+  window._houseDraft=h;
+  openModal({title:editing?'Chỉnh sửa nhà':'Thêm nhà mới',
+    bodyHTML:`
+      <div class="field"><label>Tên nhà <span class="req">*</span></label><input id="f_name" value="${esc(h.name)}" placeholder="VD: Nhà trọ số 1"></div>
+      <div class="field"><label>Địa chỉ</label><input id="f_addr" value="${esc(h.address)}" placeholder="Số nhà, đường, phường…"></div>
+      <div class="sectitle">Danh sách phòng</div>
+      <div id="roomList" class="inline-list"></div>
+      <button class="btn ghost sm" type="button" onclick="addRoomRow()">＋ Thêm phòng</button>
+      <div class="sectitle">Người quản lý hợp đồng</div>
+      <div class="grid2"><div class="field"><label>Họ và tên</label><input id="f_mgr" value="${esc(h.manager.name)}"></div>
+        <div class="field"><label>Năm sinh</label><input id="f_mgryob" inputmode="numeric" value="${esc(h.manager.birthYear)}" placeholder="VD: 1985"></div></div>
+      <div class="field"><label>Chữ ký người quản lý</label>
+        <div class="imgslot sig" id="prev_mgrsig">${imgSlotInner(imgSrc(h.manager.signature))}</div>
+        <button type="button" class="btn sec sm" onclick="signManager()">✍️ Ký tên</button>
+        <div class="hint">Chữ ký này sẽ tự động gắn vào mọi hợp đồng của nhà.</div></div>
+      <div class="sectitle">Thời hạn hợp đồng của nhà</div>
+      <div class="grid2"><div class="field"><label>Từ tháng/năm</label><input id="f_cs" type="month" value="${esc(h.contractStart)}"></div>
+        <div class="field"><label>Đến tháng/năm</label><input id="f_ce" type="month" value="${esc(h.contractEnd)}"></div></div>
+      <div class="sectitle">Bảo mật</div>
+      <div class="field"><label>Mật khẩu của nhà <span class="req">*</span></label><input id="f_pw" type="text" value="${esc(h.password)}" placeholder="Mật khẩu để sửa/xoá nhà"></div>
+      <div class="field"><label>Câu hỏi gợi ý mật khẩu</label><input id="f_hint" value="${esc(h.passwordHint)}" placeholder="VD: Tên thú cưng đầu tiên?"></div>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="saveHouse">${editing?'Lưu thay đổi':'Tạo nhà'}</button>`,
+    onMount:(m)=>{window._roomDraft=h.rooms.map(r=>({...r}));renderRoomRows();
+      $('#saveHouse',m).onclick=()=>saveHouseForm(h.id,editing);}
+  });
+}
+function signManager(){openSignaturePad('Người quản lý ký tên',(data)=>{
+  window._houseDraft.manager.signature=window._houseDraft.manager.signature||newImg();
+  window._houseDraft.manager.signature.data=data;window._houseDraft.manager.signature.url=null;
+  const el=$('#prev_mgrsig');if(el)el.innerHTML=imgSlotInner(data);});}
+function renderRoomRows(){const box=$('#roomList');if(!box)return;
+  if(!window._roomDraft.length){box.innerHTML=`<div class="muted center" style="padding:6px">Chưa có phòng nào</div>`;return;}
+  box.innerHTML=window._roomDraft.map((r,i)=>`<div class="chiprow">
+    <input style="flex:2" value="${esc(r.name)}" placeholder="Tên phòng" oninput="window._roomDraft[${i}].name=this.value">
+    <select style="flex:1.3" onchange="window._roomDraft[${i}].type=this.value">
+      <option value="KTX" ${r.type==='KTX'?'selected':''}>Phòng KTX</option>
+      <option value="TRO" ${r.type==='TRO'?'selected':''}>Phòng trọ</option></select>
+    <button class="delx" type="button" onclick="removeRoomRow(${i})">🗑️</button></div>`).join('');
+}
+function addRoomRow(){window._roomDraft.push({id:uid(),name:'',type:'KTX'});renderRoomRows();}
+function removeRoomRow(i){window._roomDraft.splice(i,1);renderRoomRows();}
+function saveHouseForm(id,editing){
+  const name=$('#f_name').value.trim(),pw=$('#f_pw').value;
+  if(!name){toast('Nhập tên nhà','err');return;}
+  if(!pw){toast('Nhập mật khẩu của nhà','err');return;}
+  const rooms=window._roomDraft.filter(r=>r.name.trim()).map(r=>({id:r.id||uid(),name:r.name.trim(),type:r.type}));
+  const patch={name,address:$('#f_addr').value.trim(),rooms,
+    manager:{name:$('#f_mgr').value.trim(),birthYear:$('#f_mgryob').value.trim(),signature:window._houseDraft.manager.signature},
+    contractStart:$('#f_cs').value,contractEnd:$('#f_ce').value,password:pw,passwordHint:$('#f_hint').value.trim()};
+  if(editing){STORE.updateHouse(id,patch);toast('Đã lưu thay đổi','ok');}
+  else{STORE.addHouse({id,...patch,contracts:[]});toast('Đã tạo nhà','ok');}
+  closeModal();renderSystem($('#content'));
+}
+
+/* ============================================================ HOUSE VIEW ============================================================ */
+function renderHouse(c){const h=STORE.house(APP.houseId);if(!h){goEntry();return;}
+  if(APP.tab==='hopdong')return renderTabHopDong(c,h);
+  const labels={doanhthu:'Doanh thu',chiphi:'Chi phí',quyettoan:'Quyết toán',thongke:'Thống kê'};
+  c.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">${labels[APP.tab]}</h2><p>Trang này sẽ được hoàn thiện sau.</p></div>`;
+}
+
+/* ---------- TAB HỢP ĐỒNG ---------- */
+function renderTabHopDong(c,h){
+  c.innerHTML=`<div class="subbar">
+      <button class="btn" onclick="renderContractTable($('#hdBody'),STORE.house(APP.houseId))">📋 Kiểm tra hợp đồng</button>
+      <button class="btn ghost" onclick="chooseContractType()">＋ Thêm hợp đồng</button>
+    </div><div id="hdBody"></div>`;
+  renderContractTable($('#hdBody',c),h);
+}
+function chooseContractType(){openModal({title:'Thêm hợp đồng',
+  bodyHTML:`<p class="muted" style="margin-top:0">Chọn loại hợp đồng:</p>
+    <button class="btn lg block" style="margin-bottom:10px;background:var(--ktx)" onclick="contractForm('KTX')">🛏️ Hợp đồng KTX</button>
+    <button class="btn lg block" style="background:var(--tro)" onclick="contractForm('TRO')">🏠 Hợp đồng phòng trọ</button>`});}
+
+function renderContractTable(box,h){
+  const contracts=h.contracts||[];let people=[];
+  contracts.forEach(ct=>{const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
+    if(ct.type==='KTX')people.push({roomName,name:ct.customer.name,cccd:ct.customer.cccd,phone:ct.customer.phone,ctId:ct.id});
+    else (ct.customers||[]).forEach(p=>people.push({roomName,name:p.name,cccd:p.cccd,phone:p.phone,ctId:ct.id}));});
+  if(!people.length){box.innerHTML=`<div class="empty"><div class="ic">📄</div>Chưa có hợp đồng nào.<br>Bấm <b>Thêm hợp đồng</b> để bắt đầu.</div>`;return;}
+  const byRoom={};people.forEach(p=>{(byRoom[p.roomName]=byRoom[p.roomName]||[]).push(p);});
+  const roomNames=Object.keys(byRoom).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true}));
+  let rows='';
+  roomNames.forEach(rn=>{rows+=`<tr class="roomhead"><td colspan="6">🏠 Phòng ${esc(rn)} — ${byRoom[rn].length} người</td></tr>`;
+    byRoom[rn].forEach((p,i)=>{rows+=`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${esc(p.cccd||'—')}</td>
+      <td>${esc(p.phone||'—')}</td><td>${esc(p.roomName)}</td>
+      <td><button class="linkbtn" onclick="showPersonInfo('${p.ctId}')">Xem thêm</button></td></tr>`;});});
+  box.innerHTML=`<div class="muted" style="margin-bottom:10px">Tổng: <b>${people.length}</b> người · <b>${contracts.length}</b> hợp đồng</div>
+    <div class="tablewrap"><table><thead><tr><th>STT</th><th>Họ và tên</th><th>CCCD</th><th>SĐT</th><th>Số phòng</th><th>Khác</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+function imgsRow(p){
+  const cell=(o,lb)=>{const s=imgSrc(o);return `<div class="docell"><div class="hint">${lb}</div>${s?`<img class="docthumb" src="${s}" onclick="viewImg(this.src)">`:`<div class="imgph small">—</div>`}</div>`;};
+  return `<div class="docrow">${cell(p.cccdPhoto,'Ảnh CCCD')}${cell(p.customerPhoto,'Ảnh khách')}${cell(p.signature,'Chữ ký')}</div>`;
+}
+function showPersonInfo(ctId){
+  const h=STORE.house(APP.houseId);const ct=h.contracts.find(x=>x.id===ctId);if(!ct)return;
+  const room=h.rooms.find(r=>r.id===ct.roomId);let html='';
+  const mgrSig=ct.managerSignature&&imgHas(ct.managerSignature)?ct.managerSignature:(h.manager&&h.manager.signature);
+  const mgrBlock=imgHas(mgrSig)?`<div class="sectitle">Chữ ký người quản lý</div><div style="text-align:center"><img class="docthumb" style="height:90px;width:auto" src="${imgSrc(mgrSig)}" onclick="viewImg(this.src)"></div>`:'';
+  if(ct.type==='KTX'){const c=ct.customer,g=ct.guardian;
+    html=`<span class="badge ktx">Hợp đồng KTX</span>
+      <div class="sectitle">Khách thuê</div>${kv('Họ và tên',c.name)}${kv('Ngày sinh',fmtDate(c.dob))}${kv('Số điện thoại',c.phone)}${kv('Số CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}
+      ${imgsRow(c)}
+      <div class="sectitle">Người chịu trách nhiệm</div>${kv('Họ và tên',g.name)}${kv('Vai trò',g.role)}${kv('Số điện thoại',g.phone)}
+      <div class="sectitle">Thuê</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDate(ct.rentStart)+' → '+fmtDate(ct.rentEnd))}${kv('Tiền giường/tháng',money(ct.pricePerBed))}
+      ${mgrBlock}`;
+  }else{
+    html=`<span class="badge tro">Hợp đồng phòng trọ</span>
+      <div class="sectitle">Phòng &amp; thời hạn</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDate(ct.rentStart)+' → '+fmtDate(ct.rentEnd))}
+      <div class="sectitle">Đơn giá</div>${kv('Tiền phòng/tháng',money(ct.pricePerRoom))}${kv('Tiền nước/người',money(ct.waterPerPerson))}${kv('Tiền dịch vụ/người',money(ct.servicePerPerson))}${kv('Tiền xe/xe',money(ct.vehiclePerVehicle))}${kv('Tiền điện/kWh',money(ct.electricPerKwh))}
+      <div class="sectitle">Khách thuê (${(ct.customers||[]).length})</div>
+      ${(ct.customers||[]).map((c,i)=>`<div class="card" style="margin-bottom:8px"><div style="font-weight:700;margin-bottom:6px">${i+1}. ${esc(c.name)}</div>
+        ${kv('Ngày sinh',fmtDate(c.dob))}${kv('SĐT',c.phone)}${kv('CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}${imgsRow(c)}</div>`).join('')}
+      ${mgrBlock}`;
+  }
+  openModal({title:'Thông tin chi tiết',bodyHTML:html,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>
+      <button class="btn danger" onclick="deleteContract('${ct.id}')">🗑️ Xoá</button>
+      <button class="btn" onclick="contractForm('${ct.type}','${ct.id}')">✏️ Sửa</button>`});
+}
+function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v||'—')}</span></div>`;}
+function deleteContract(ctId){const h=STORE.house(APP.houseId);h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();closeModal();toast('Đã xoá hợp đồng','ok');render();}
+
+/* ---------- CONTRACT FORM ---------- */
+function contractForm(type,id){
+  const h=STORE.house(APP.houseId);const editing=!!id;let ct;
+  if(editing)ct=JSON.parse(JSON.stringify(h.contracts.find(x=>x.id===id)));
+  else if(type==='KTX')ct={id:uid(),type:'KTX',roomId:'',customer:blankCust(),guardian:{name:'',role:'Bố',phone:''},rentStart:'',rentEnd:'',pricePerBed:''};
+  else ct={id:uid(),type:'TRO',roomId:'',customers:[blankCust()],rentStart:'',rentEnd:'',pricePerRoom:'',waterPerPerson:'',servicePerPerson:'',vehiclePerVehicle:'',electricPerKwh:''};
+  if(type==='KTX')normalizeCust(ct.customer);else (ct.customers=ct.customers||[]).forEach(normalizeCust);
+  window._ctDraft=ct;
+  const rooms=h.rooms.filter(r=>r.type===type);
+  const roomOpts=`<option value="">— Chọn phòng —</option>`+rooms.map(r=>`<option value="${r.id}" ${ct.roomId===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
+  let body;
+  if(type==='KTX'){const c=ct.customer,g=ct.guardian;
+    body=`<span class="badge ktx">Hợp đồng KTX</span>
+      <div class="sectitle">Thông tin khách hàng</div>
+      <div class="field"><label>Họ và tên <span class="req">*</span></label><input id="c_name" value="${esc(c.name)}"></div>
+      <div class="grid2"><div class="field"><label>Ngày sinh</label><input id="c_dob" type="date" value="${esc(c.dob)}"></div>
+        <div class="field"><label>Số điện thoại</label><input id="c_phone" inputmode="tel" value="${esc(c.phone)}"></div></div>
+      <div class="grid2"><div class="field"><label>Số CCCD</label><input id="c_cccd" inputmode="numeric" value="${esc(c.cccd)}"></div>
+        <div class="field"><label>Biển số xe</label><input id="c_bienso" value="${esc(c.bienso)}" placeholder="(nếu có)"></div></div>
+      ${imgField('ktx:cccdPhoto','Ảnh căn cước công dân',c.cccdPhoto)}
+      ${imgField('ktx:customerPhoto','Ảnh khách hàng',c.customerPhoto)}
+      ${sigField('ktx:signature',c.signature)}
+      <div class="sectitle">Người chịu trách nhiệm liên quan</div>
+      <div class="field"><label>Họ và tên</label><input id="g_name" value="${esc(g.name)}"></div>
+      <div class="grid2"><div class="field"><label>Vai trò</label><select id="g_role">${['Bố','Mẹ','Anh/Chị/Em','Khác'].map(r=>`<option ${g.role===r?'selected':''}>${r}</option>`).join('')}</select></div>
+        <div class="field"><label>Số điện thoại</label><input id="g_phone" inputmode="tel" value="${esc(g.phone)}"></div></div>
+      <div class="sectitle">Thuê</div>
+      <div class="field"><label>Chọn phòng <span class="req">*</span></label><select id="c_room">${roomOpts}</select>
+        ${rooms.length?'':'<div class="hint" style="color:var(--danger)">Nhà chưa có phòng KTX. Thêm phòng KTX trong Quản lý hệ thống.</div>'}</div>
+      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" type="date" value="${esc(ct.rentStart)}"></div>
+        <div class="field"><label>Đến ngày</label><input id="c_re" type="date" value="${esc(ct.rentEnd)}"></div></div>
+      <div class="field"><label>Tiền thuê giường/tháng (₫)</label><input id="c_bed" inputmode="numeric" value="${esc(ct.pricePerBed)}"></div>
+      ${mgrSigBlock(h)}`;
+  }else{
+    body=`<span class="badge tro">Hợp đồng phòng trọ</span>
+      <div class="field" style="margin-top:12px"><label>Chọn phòng <span class="req">*</span></label><select id="c_room">${roomOpts}</select>
+        ${rooms.length?'':'<div class="hint" style="color:var(--danger)">Nhà chưa có phòng trọ. Thêm phòng loại "Phòng trọ" trong Quản lý hệ thống.</div>'}</div>
+      <div class="sectitle">Khách hàng</div><div id="custList"></div>
+      <button class="btn ghost sm" type="button" onclick="addCust()">＋ Thêm khách hàng</button>
+      <div class="sectitle">Thời hạn cho thuê</div>
+      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" type="date" value="${esc(ct.rentStart)}"></div>
+        <div class="field"><label>Đến ngày</label><input id="c_re" type="date" value="${esc(ct.rentEnd)}"></div></div>
+      <div class="sectitle">Đơn giá</div>
+      <div class="grid2">
+        <div class="field"><label>Tiền thuê phòng/tháng (₫)</label><input id="c_room_price" inputmode="numeric" value="${esc(ct.pricePerRoom)}"></div>
+        <div class="field"><label>Tiền nước/người (₫)</label><input id="c_water" inputmode="numeric" value="${esc(ct.waterPerPerson)}"></div>
+        <div class="field"><label>Tiền dịch vụ/người (₫)</label><input id="c_service" inputmode="numeric" value="${esc(ct.servicePerPerson)}"></div>
+        <div class="field"><label>Tiền xe/xe (₫)</label><input id="c_vehicle" inputmode="numeric" value="${esc(ct.vehiclePerVehicle)}"></div>
+        <div class="field"><label>Tiền điện/kWh (₫)</label><input id="c_elec" inputmode="numeric" value="${esc(ct.electricPerKwh)}"></div></div>
+      ${mgrSigBlock(h)}`;
+  }
+  openModal({title:(editing?'Sửa ':'Thêm ')+(type==='KTX'?'hợp đồng KTX':'hợp đồng phòng trọ'),bodyHTML:body,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="saveCt">${editing?'Lưu':'Tạo hợp đồng'}</button>`,
+    onMount:(m)=>{if(type==='TRO')renderCustList();$('#saveCt',m).onclick=()=>saveContract(type,editing);}});
+}
+function mgrSigBlock(h){const s=h.manager&&h.manager.signature;const src=imgSrc(s);
+  return `<div class="sectitle">Chữ ký người quản lý</div><div class="card">${src?`<img class="sigimg" src="${src}"><div class="hint">Tự động lấy từ thông tin nhà.</div>`:`<div class="muted">Người quản lý chưa ký. Vào Quản lý hệ thống → sửa nhà để ký.</div>`}</div>`;}
+
+function renderCustList(){const box=$('#custList');if(!box)return;const cs=window._ctDraft.customers;
+  box.innerHTML=cs.map((c,i)=>`<div class="inline-list">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Khách ${i+1}</b>
+      ${cs.length>1?`<button class="delx" type="button" onclick="removeCust(${i})">🗑️</button>`:''}</div>
+    <div class="field" style="margin-bottom:8px"><label>Họ và tên</label><input value="${esc(c.name)}" oninput="window._ctDraft.customers[${i}].name=this.value"></div>
+    <div class="grid2"><div class="field" style="margin-bottom:8px"><label>Ngày sinh</label><input type="date" value="${esc(c.dob)}" oninput="window._ctDraft.customers[${i}].dob=this.value"></div>
+      <div class="field" style="margin-bottom:8px"><label>SĐT</label><input inputmode="tel" value="${esc(c.phone)}" oninput="window._ctDraft.customers[${i}].phone=this.value"></div></div>
+    <div class="grid2"><div class="field" style="margin-bottom:8px"><label>CCCD</label><input inputmode="numeric" value="${esc(c.cccd)}" oninput="window._ctDraft.customers[${i}].cccd=this.value"></div>
+      <div class="field" style="margin-bottom:8px"><label>Biển số xe</label><input value="${esc(c.bienso)}" placeholder="(nếu có)" oninput="window._ctDraft.customers[${i}].bienso=this.value"></div></div>
+    ${imgField('cust:'+i+':cccdPhoto','Ảnh căn cước công dân',c.cccdPhoto)}
+    ${imgField('cust:'+i+':customerPhoto','Ảnh khách hàng',c.customerPhoto)}
+    ${sigField('cust:'+i+':signature',c.signature)}
+  </div>`).join('');
+}
+function addCust(){window._ctDraft.customers.push(blankCust());renderCustList();}
+function removeCust(i){window._ctDraft.customers.splice(i,1);renderCustList();}
+
+function saveContract(type,editing){
+  const h=STORE.house(APP.houseId);const ct=window._ctDraft;
+  const roomId=$('#c_room').value;if(!roomId){toast('Chọn phòng','err');return;}
+  ct.roomId=roomId;ct.rentStart=$('#c_rs').value;ct.rentEnd=$('#c_re').value;
+  if(type==='KTX'){
+    const name=$('#c_name').value.trim();if(!name){toast('Nhập họ tên khách hàng','err');return;}
+    const c=ct.customer;c.name=name;c.dob=$('#c_dob').value;c.phone=$('#c_phone').value.trim();c.cccd=$('#c_cccd').value.trim();c.bienso=$('#c_bienso').value.trim();
+    if(!imgHas(c.cccdPhoto)){toast('Bắt buộc: ảnh CCCD','err');return;}
+    if(!imgHas(c.customerPhoto)){toast('Bắt buộc: ảnh khách hàng','err');return;}
+    if(!imgHas(c.signature)){toast('Bắt buộc: chữ ký khách hàng','err');return;}
+    ct.guardian={name:$('#g_name').value.trim(),role:$('#g_role').value,phone:$('#g_phone').value.trim()};
+    ct.pricePerBed=$('#c_bed').value;
+  }else{
+    const cs=ct.customers.filter(c=>c.name.trim());if(!cs.length){toast('Thêm ít nhất 1 khách hàng có tên','err');return;}
+    for(let i=0;i<cs.length;i++){const c=cs[i];
+      if(!imgHas(c.cccdPhoto)){toast(`Khách ${i+1}: thiếu ảnh CCCD`,'err');return;}
+      if(!imgHas(c.customerPhoto)){toast(`Khách ${i+1}: thiếu ảnh khách hàng`,'err');return;}
+      if(!imgHas(c.signature)){toast(`Khách ${i+1}: thiếu chữ ký`,'err');return;}}
+    ct.customers=cs;
+    ct.pricePerRoom=$('#c_room_price').value;ct.waterPerPerson=$('#c_water').value;ct.servicePerPerson=$('#c_service').value;
+    ct.vehiclePerVehicle=$('#c_vehicle').value;ct.electricPerKwh=$('#c_elec').value;
+  }
+  ct.managerSignature=(h.manager&&imgHas(h.manager.signature))?{...h.manager.signature}:null;
+  if(!h.contracts)h.contracts=[];
+  if(editing){const idx=h.contracts.findIndex(x=>x.id===ct.id);h.contracts[idx]=ct;}else h.contracts.push(ct);
+  STORE.save();closeModal();toast('Đã lưu hợp đồng','ok');render();
+}
+
+/* ============================================================ GOOGLE SYNC ============================================================ */
+function getSync(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_sync'))||{};}catch(e){return {};}}
+function setSync(c){localStorage.setItem('nhaTroLySon_sync',JSON.stringify(c));}
+function openSync(){const cfg=getSync();
+  const last=cfg.lastSync?new Date(cfg.lastSync).toLocaleString('vi-VN'):'Chưa đồng bộ';
+  openModal({title:'Đồng bộ Google Sheet/Drive',
+    bodyHTML:`<div class="card" style="margin-bottom:12px">
+        <div class="kv"><span class="k">Trạng thái</span><span class="v">${cfg.url?'<span class="badge ok">Đã kết nối</span>':'<span class="badge danger">Chưa kết nối</span>'}</span></div>
+        <div class="kv"><span class="k">Đồng bộ gần nhất</span><span class="v">${last}</span></div>
+        ${cfg.spreadsheetUrl?`<div class="kv"><span class="k">Bảng tính</span><span class="v"><a href="${cfg.spreadsheetUrl}" target="_blank">Mở Google Sheet</a></span></div>`:''}</div>
+      <div class="field"><label>URL Apps Script (Web App)</label>
+        <input id="syncUrl" value="${esc(cfg.url||'')}" placeholder="https://script.google.com/macros/s/.../exec"></div>
+      <button class="btn block" style="margin-bottom:10px" onclick="saveSyncUrl()">💾 Lưu kết nối</button>
+      <button class="btn ok block" id="syncBtn" onclick="syncNow()">☁️ Đồng bộ ngay</button>
+      <p class="hint" style="margin-top:12px">Chưa có URL? Mở file <b>HUONG_DAN_KET_NOI_GOOGLE.md</b> kèm theo để tạo Apps Script (chỉ làm 1 lần).</p>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});
+}
+function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');}
+function buildSyncPayload(){
+  const all=JSON.parse(JSON.stringify(STORE.all()));const images={};
+  function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
+  all.houses.forEach(h=>{if(h.manager&&h.manager.signature)walk(h.manager.signature);
+    (h.contracts||[]).forEach(ct=>{if(ct.managerSignature)walk(ct.managerSignature);
+      if(ct.type==='KTX'){if(ct.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>ct.customer[k]&&walk(ct.customer[k]));}
+      else (ct.customers||[]).forEach(c=>['cccdPhoto','customerPhoto','signature'].forEach(k=>c[k]&&walk(c[k])));});});
+  return {action:'sync',data:all,images};
+}
+function applyUploaded(map){
+  function walk(o){if(o&&o.imgId&&map[o.imgId]){o.url=map[o.imgId];}}
+  STORE.houses().forEach(h=>{if(h.manager&&h.manager.signature)walk(h.manager.signature);
+    (h.contracts||[]).forEach(ct=>{if(ct.managerSignature)walk(ct.managerSignature);
+      if(ct.type==='KTX'){if(ct.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>ct.customer[k]&&walk(ct.customer[k]));}
+      else (ct.customers||[]).forEach(c=>['cccdPhoto','customerPhoto','signature'].forEach(k=>c[k]&&walk(c[k])));});});
+  STORE.save();
+}
+async function syncNow(){
+  const cfg=getSync();if(!cfg.url){toast('Chưa cấu hình URL Apps Script','err');return;}
+  const btn=$('#syncBtn');if(btn){btn.disabled=true;btn.textContent='⏳ Đang đồng bộ…';}
+  try{
+    const res=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(buildSyncPayload())});
+    const txt=await res.text();let json;try{json=JSON.parse(txt);}catch(e){throw new Error('Phản hồi không hợp lệ. Kiểm tra lại URL/triển khai Apps Script.');}
+    if(!json.ok)throw new Error(json.error||'Lỗi không rõ');
+    applyUploaded(json.uploaded||{});
+    cfg.spreadsheetUrl=json.spreadsheetUrl||cfg.spreadsheetUrl;cfg.lastSync=Date.now();setSync(cfg);
+    toast('Đồng bộ thành công','ok');openSync();
+  }catch(err){toast('Lỗi đồng bộ: '+err.message,'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='☁️ Đồng bộ ngay';}}
+}
+
+/* ---------- BACKUP ---------- */
+function openBackup(){openModal({title:'Sao lưu & phục hồi',
+  bodyHTML:`<p class="muted" style="margin-top:0">Dữ liệu đang lưu trên thiết bị này. Bạn có thể xuất ra file để sao lưu/chuyển máy, hoặc dùng đồng bộ Google.</p>
+    <button class="btn block" style="margin-bottom:10px" onclick="exportData()">⬇️ Xuất dữ liệu (.json)</button>
+    <label class="btn sec block" style="margin-bottom:6px">⬆️ Nhập dữ liệu từ file<input type="file" accept=".json,application/json" style="display:none" onchange="importData(this)"></label>`,
+  footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});}
+function exportData(){const blob=new Blob([STORE.export()],{type:'application/json'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='nhatrolyson-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();toast('Đã xuất dữ liệu','ok');}
+function importData(input){const f=input.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{STORE.import(r.result);toast('Đã nhập dữ liệu','ok');closeModal();render();}catch(e){toast('File không hợp lệ','err');}};r.readAsText(f);}
+
+/* ---------- navigation ---------- */
+function goEntry(){APP.screen='entry';APP.houseId=null;scrollTop();render();}
+function goSystem(){APP.screen='system';scrollTop();render();}
+function enterHouse(id){APP.screen='house';APP.houseId=id;APP.tab='hopdong';APP.hdView='list';scrollTop();render();}
+function setTab(t){APP.tab=t;scrollTop();render();}
+function scrollTop(){window.scrollTo(0,0);}
+
+render();
+</script>
+</body>
+</html>
