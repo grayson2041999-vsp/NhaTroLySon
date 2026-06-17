@@ -391,7 +391,7 @@ function renderSystem(c){const houses=STORE.houses();
 function confirmDeleteHouse(id){const h=STORE.house(id);
   openModal({title:'Xoá nhà',bodyHTML:`<p>Bạn chắc chắn xoá nhà <b>${esc(h.name)}</b> và toàn bộ hợp đồng? Không thể hoàn tác.</p>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn danger" onclick="doDeleteHouse('${id}')">Xoá nhà</button>`});}
-function doDeleteHouse(id){STORE.removeHouse(id);closeModal();toast('Đã xoá nhà','ok');renderSystem($('#content'));}
+function doDeleteHouse(id){STORE.removeHouse(id);enqueueOp({entity:'house',type:'delete',id});closeModal();toast('Đã xoá nhà','ok');renderSystem($('#content'));}
 
 /* ---------- HOUSE FORM ---------- */
 function houseForm(id){
@@ -450,6 +450,8 @@ function saveHouseForm(id,editing){
     contractStart:$('#f_cs').value,contractEnd:$('#f_ce').value,password:pw,passwordHint:$('#f_hint').value.trim()};
   if(editing){STORE.updateHouse(id,patch);toast('Đã lưu thay đổi','ok');}
   else{STORE.addHouse({id,...patch,contracts:[]});toast('Đã tạo nhà','ok');}
+  const _hm=JSON.parse(JSON.stringify(STORE.house(id)));delete _hm.contracts;
+  enqueueOp({entity:'house',type:'upsert',house:_hm});
   closeModal();renderSystem($('#content'));
 }
 
@@ -522,7 +524,7 @@ function showPersonInfo(ctId){
       <button class="btn" onclick="contractForm('${ct.type}','${ct.id}')">✏️ Sửa</button>`});
 }
 function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v||'—')}</span></div>`;}
-function deleteContract(ctId){const h=STORE.house(APP.houseId);h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();closeModal();toast('Đã xoá hợp đồng','ok');render();}
+function deleteContract(ctId){const h=STORE.house(APP.houseId);h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
 
 /* ---------- CONTRACT FORM ---------- */
 function contractForm(type,id){
@@ -624,7 +626,8 @@ function saveContract(type,editing){
   ct.managerSignature=(h.manager&&imgHas(h.manager.signature))?{...h.manager.signature}:null;
   if(!h.contracts)h.contracts=[];
   if(editing){const idx=h.contracts.findIndex(x=>x.id===ct.id);h.contracts[idx]=ct;}else h.contracts.push(ct);
-  STORE.save();closeModal();toast('Đã lưu hợp đồng','ok');render();
+  STORE.save();enqueueOp({entity:'contract',type:'upsert',houseId:APP.houseId,contract:JSON.parse(JSON.stringify(ct))});
+  closeModal();toast('Đã lưu hợp đồng','ok');render();
 }
 
 /* ============================================================ GOOGLE SYNC ============================================================ */
@@ -632,8 +635,40 @@ function getSync(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_sync'
 function setSync(c){localStorage.setItem('nhaTroLySon_sync',JSON.stringify(c));}
 function effectiveUrl(){return (SYNC_URL&&SYNC_URL.trim())||(getSync().url||'');}
 let _autoTimer=null,_suppressAuto=false,_syncing=false;
-function onDataChanged(){if(_suppressAuto)return;scheduleAutoSync();}
-function scheduleAutoSync(){if(!effectiveUrl())return;clearTimeout(_autoTimer);_autoTimer=setTimeout(()=>doSync(true),2500);}
+function onDataChanged(){if(_suppressAuto)return;scheduleFlush();}
+/* ===== Hàng đợi thao tác: gửi từng insert/update/delete theo bản ghi ===== */
+function getOutbox(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_outbox'))||[];}catch(e){return [];}}
+function setOutbox(a){localStorage.setItem('nhaTroLySon_outbox',JSON.stringify(a));}
+function enqueueOp(op){if(!effectiveUrl())return;const q=getOutbox();q.push(op);setOutbox(q);scheduleFlush();}
+function scheduleFlush(){if(!effectiveUrl())return;clearTimeout(_autoTimer);_autoTimer=setTimeout(flushOutbox,1500);}
+function collectOpImages(op,images){
+  function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
+  function ct(c){if(!c)return;if(c.managerSignature)walk(c.managerSignature);
+    if(c.type==='KTX'){if(c.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>c.customer[k]&&walk(c.customer[k]));}
+    else (c.customers||[]).forEach(x=>['cccdPhoto','customerPhoto','signature'].forEach(k=>x[k]&&walk(x[k])));}
+  if(op.house){if(op.house.manager&&op.house.manager.signature)walk(op.house.manager.signature);(op.house.contracts||[]).forEach(ct);}
+  if(op.contract)ct(op.contract);
+  if(op.data)(op.data.houses||[]).forEach(h=>{if(h.manager&&h.manager.signature)walk(h.manager.signature);(h.contracts||[]).forEach(ct);});
+}
+async function flushOutbox(){
+  const url=effectiveUrl();if(!url)return;
+  const q=getOutbox();if(!q.length)return;
+  if(_syncing)return;_syncing=true;
+  const sendCount=q.length;
+  const ops=JSON.parse(JSON.stringify(q.slice(0,sendCount)));
+  const images={};ops.forEach(op=>collectOpImages(op,images));
+  try{
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'ops',ops,images})});
+    const txt=await res.text();const json=JSON.parse(txt);
+    if(!json.ok)throw new Error(json.error||'Lỗi');
+    _suppressAuto=true;applyUploaded(json.uploaded||{});_suppressAuto=false;
+    const cfg=getSync();cfg.spreadsheetUrl=json.spreadsheetUrl||cfg.spreadsheetUrl;cfg.lastSync=Date.now();setSync(cfg);
+    setOutbox(getOutbox().slice(sendCount));
+    toast('✓ Đã đồng bộ','ok');
+    if(getOutbox().length)scheduleFlush();
+  }catch(e){_suppressAuto=false;/* giữ hàng đợi để thử lại sau */}
+  finally{_syncing=false;}
+}
 function openSync(){const cfg=getSync();const embedded=!!(SYNC_URL&&SYNC_URL.trim());const url=effectiveUrl();
   const last=cfg.lastSync?new Date(cfg.lastSync).toLocaleString('vi-VN'):'Chưa đồng bộ';
   openModal({title:'Đồng bộ Google Sheet/Drive',
@@ -651,7 +686,7 @@ function openSync(){const cfg=getSync();const embedded=!!(SYNC_URL&&SYNC_URL.tri
       <button class="btn ok block" id="syncBtn" onclick="syncNow()">☁️ Đồng bộ ngay</button>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});
 }
-function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');if(u)scheduleAutoSync();}
+function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');if(u)doSync(true);}
 function buildSyncPayload(){
   const all=JSON.parse(JSON.stringify(STORE.all()));const images={};
   function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
@@ -689,6 +724,25 @@ async function doSync(isAuto){
   }
   finally{_syncing=false;const b=$('#syncBtn');if(b){b.disabled=false;b.textContent='☁️ Đồng bộ ngay';}}
 }
+/* Kéo dữ liệu mới nhất từ Google về (đồng bộ 2 chiều) */
+async function pullFromServer(){
+  const url=effectiveUrl();if(!url)return false;
+  try{
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'pull'})});
+    const txt=await res.text();const json=JSON.parse(txt);
+    if(json&&json.ok&&json.data&&Array.isArray(json.data.houses)){
+      const serverN=json.data.houses.length, localN=STORE.houses().length;
+      if(serverN>0){
+        _suppressAuto=true;STORE.import(JSON.stringify(json.data));_suppressAuto=false;
+        const cfg=getSync();cfg.lastSync=Date.now();setSync(cfg);
+        return true;
+      }
+      // Server trống nhưng máy này có dữ liệu -> đẩy lên khôi phục, KHÔNG xoá local
+      if(serverN===0 && localN>0){ doSync(true); }
+    }
+  }catch(e){_suppressAuto=false;}
+  return false;
+}
 
 /* ---------- BACKUP ---------- */
 function openBackup(){openModal({title:'Sao lưu & phục hồi',
@@ -699,7 +753,7 @@ function openBackup(){openModal({title:'Sao lưu & phục hồi',
 function exportData(){const blob=new Blob([STORE.export()],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='nhatrolyson-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();toast('Đã xuất dữ liệu','ok');}
 function importData(input){const f=input.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{STORE.import(r.result);toast('Đã nhập dữ liệu','ok');closeModal();render();}catch(e){toast('File không hợp lệ','err');}};r.readAsText(f);}
+  r.onload=()=>{try{STORE.import(r.result);toast('Đã nhập dữ liệu','ok');closeModal();render();doSync(true);}catch(e){toast('File không hợp lệ','err');}};r.readAsText(f);}
 
 /* ---------- navigation ---------- */
 function goEntry(){APP.screen='entry';APP.houseId=null;scrollTop();render();}
@@ -709,6 +763,20 @@ function setTab(t){APP.tab=t;scrollTop();render();}
 function scrollTop(){window.scrollTo(0,0);}
 
 render();
+/* Mở app: gửi thao tác còn tồn (nếu có) -> tải bản mới nhất từ Google về */
+(async function(){
+  if(effectiveUrl()){
+    await flushOutbox();
+    const ok=await pullFromServer();
+    if(ok){render();toast('Đã tải dữ liệu mới nhất','ok');}
+  }
+})();
+/* Quay lại app: gửi thao tác tồn rồi tải lại, nếu không đang nhập liệu */
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&!$('#modalBg').classList.contains('show')&&!_syncing){
+    flushOutbox().then(function(){return pullFromServer();}).then(function(ok){if(ok)render();});
+  }
+});
 </script>
 </body>
 </html>
