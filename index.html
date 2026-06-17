@@ -225,6 +225,12 @@ function idbPut(imgId,data){return new Promise((res,rej)=>{if(!IDB)return rej(ne
   try{const t=IDB.transaction('images','readwrite');t.objectStore('images').put({imgId,data});t.oncomplete=()=>res();t.onerror=()=>rej(t.error);}catch(e){rej(e);}});}
 function idbAll(){return new Promise((res)=>{if(!IDB)return res([]);
   try{const t=IDB.transaction('images','readonly');const rq=t.objectStore('images').getAll();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>res([]);}catch(e){res([]);}});}
+function idbDelete(imgId){return new Promise((res)=>{if(!IDB||!imgId)return res();try{const t=IDB.transaction('images','readwrite');t.objectStore('images').delete(imgId);t.oncomplete=()=>res();t.onerror=()=>res();}catch(e){res();}});}
+/* gom ảnh KHÁCH của 1 hợp đồng (KHÔNG gồm chữ ký người quản lý vì dùng chung) */
+function contractCustomerImgs(ct){const a=[];const add=o=>{if(o)a.push(o);};if(!ct)return a;
+  if(ct.type==='KTX'){if(ct.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>add(ct.customer[k]));}
+  else (ct.customers||[]).forEach(c=>['cccdPhoto','customerPhoto','signature'].forEach(k=>add(c[k])));return a;}
+function dropImages(imgObjs){(imgObjs||[]).forEach(o=>{if(o&&o.imgId){delete IMGCACHE[o.imgId];idbDelete(o.imgId);}});}
 async function storeImage(obj,dataUrl){
   if(!obj.imgId)obj.imgId=uid();
   IMGCACHE[obj.imgId]=dataUrl;obj.url=null;
@@ -432,7 +438,7 @@ function renderSystem(c){const houses=STORE.houses();
 function confirmDeleteHouse(id){const h=STORE.house(id);
   openModal({title:'Xoá nhà',bodyHTML:`<p>Bạn chắc chắn xoá nhà <b>${esc(h.name)}</b> và toàn bộ hợp đồng? Không thể hoàn tác.</p>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn danger" onclick="doDeleteHouse('${id}')">Xoá nhà</button>`});}
-function doDeleteHouse(id){STORE.removeHouse(id);enqueueOp({entity:'house',type:'delete',id});closeModal();toast('Đã xoá nhà','ok');renderSystem($('#content'));}
+function doDeleteHouse(id){const h=STORE.house(id);if(h){(h.contracts||[]).forEach(ct=>dropImages(contractCustomerImgs(ct)));if(h.manager&&h.manager.signature)dropImages([h.manager.signature]);}STORE.removeHouse(id);enqueueOp({entity:'house',type:'delete',id});closeModal();toast('Đã xoá nhà','ok');renderSystem($('#content'));}
 
 /* ---------- HOUSE FORM ---------- */
 function houseForm(id){
@@ -567,7 +573,7 @@ function showPersonInfo(ctId){
       <button class="btn" onclick="contractForm('${ct.type}','${ct.id}')">✏️ Sửa</button>`});
 }
 function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v||'—')}</span></div>`;}
-function deleteContract(ctId){const h=STORE.house(APP.houseId);h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
+function deleteContract(ctId){const h=STORE.house(APP.houseId);const ct=h.contracts.find(x=>x.id===ctId);if(ct)dropImages(contractCustomerImgs(ct));h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
 
 /* ---------- CONTRACT FORM ---------- */
 function contractForm(type,id){
@@ -673,7 +679,9 @@ function saveContract(type,editing){
   }
   ct.managerSignature=(h.manager&&imgHas(h.manager.signature))?{...h.manager.signature}:null;
   if(!h.contracts)h.contracts=[];
-  if(editing){const idx=h.contracts.findIndex(x=>x.id===ct.id);h.contracts[idx]=ct;}else h.contracts.push(ct);
+  if(editing){const idx=h.contracts.findIndex(x=>x.id===ct.id);const old=h.contracts[idx];
+    if(old){const newIds=new Set(contractCustomerImgs(ct).map(o=>o.imgId));dropImages(contractCustomerImgs(old).filter(o=>o.imgId&&!newIds.has(o.imgId)));}
+    h.contracts[idx]=ct;}else h.contracts.push(ct);
   STORE.save();enqueueOp({entity:'contract',type:'upsert',houseId:APP.houseId,contract:JSON.parse(JSON.stringify(ct))});
   closeModal();toast('Đã lưu hợp đồng','ok');render();
 }
