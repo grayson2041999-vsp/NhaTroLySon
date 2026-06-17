@@ -175,12 +175,19 @@ tr:last-child td{border-bottom:none}
    STORE = lớp lưu trữ; SYNC = đồng bộ Google Sheet/Drive (Apps Script)
    ============================================================ */
 
+/* ========= CẤU HÌNH ĐỒNG BỘ =========
+   Dán URL Apps Script (Web App) của bạn vào giữa 2 dấu nháy bên dưới.
+   Khi đã có URL, app sẽ TỰ ĐỘNG đồng bộ lên Google mỗi khi có thay đổi.
+   Ví dụ: const SYNC_URL = "https://script.google.com/macros/s/AKfy.../exec";
+   ===================================== */
+const SYNC_URL = "https://script.google.com/macros/s/AKfycbwu6CCVyXdmStUgtdA1ERk7uv5B5rC4DMd0Qk-YrnhZylkIOc7WZdEy9117yycRrWIQ/exec";
+
 /* ---------- STORE ---------- */
 const STORE = (function(){
   const KEY='nhaTroLySon_v1';
   let data={houses:[]};
   function load(){try{const r=localStorage.getItem(KEY);if(r)data=JSON.parse(r);}catch(e){}if(!data.houses)data.houses=[];}
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){toast('Bộ nhớ đầy — hãy đồng bộ rồi thử lại','err');}}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){toast('Bộ nhớ đầy — hãy đồng bộ rồi thử lại','err');}if(typeof onDataChanged==='function')onDataChanged();}
   load();
   return {
     all:()=>data, houses:()=>data.houses,
@@ -337,15 +344,12 @@ function render(){renderTopbar();renderTabs();const c=$('#content');
   else if(APP.screen==='house')renderHouse(c);}
 
 function renderTopbar(){const tb=$('#topbar');
-  if(APP.screen==='entry'){tb.innerHTML=`<div class="ttl">Nhà trọ Lý Sơn</div>
-    <button class="iconbtn" title="Đồng bộ Google" onclick="openSync()">☁️</button>
-    <button class="iconbtn" title="Sao lưu" onclick="openBackup()">⋯</button>`;}
+  if(APP.screen==='entry'){tb.innerHTML=`<div class="ttl">Nhà trọ Lý Sơn</div>`;}
   else if(APP.screen==='system'){tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
     <div class="ttl">Quản lý hệ thống<div class="sub">Thêm / chỉnh / xoá nhà</div></div>`;}
   else if(APP.screen==='house'){const h=STORE.house(APP.houseId);
     tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
-      <div class="ttl">${esc(h?h.name:'')}<div class="sub">${esc(h?h.address:'')}</div></div>
-      <button class="iconbtn" title="Đồng bộ Google" onclick="openSync()">☁️</button>`;}
+      <div class="ttl">${esc(h?h.name:'')}<div class="sub">${esc(h?h.address:'')}</div></div>`;}
 }
 function renderTabs(){const host=$('#tabsHost');
   if(APP.screen!=='house'){host.innerHTML='';return;}
@@ -626,21 +630,28 @@ function saveContract(type,editing){
 /* ============================================================ GOOGLE SYNC ============================================================ */
 function getSync(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_sync'))||{};}catch(e){return {};}}
 function setSync(c){localStorage.setItem('nhaTroLySon_sync',JSON.stringify(c));}
-function openSync(){const cfg=getSync();
+function effectiveUrl(){return (SYNC_URL&&SYNC_URL.trim())||(getSync().url||'');}
+let _autoTimer=null,_suppressAuto=false,_syncing=false;
+function onDataChanged(){if(_suppressAuto)return;scheduleAutoSync();}
+function scheduleAutoSync(){if(!effectiveUrl())return;clearTimeout(_autoTimer);_autoTimer=setTimeout(()=>doSync(true),2500);}
+function openSync(){const cfg=getSync();const embedded=!!(SYNC_URL&&SYNC_URL.trim());const url=effectiveUrl();
   const last=cfg.lastSync?new Date(cfg.lastSync).toLocaleString('vi-VN'):'Chưa đồng bộ';
   openModal({title:'Đồng bộ Google Sheet/Drive',
     bodyHTML:`<div class="card" style="margin-bottom:12px">
-        <div class="kv"><span class="k">Trạng thái</span><span class="v">${cfg.url?'<span class="badge ok">Đã kết nối</span>':'<span class="badge danger">Chưa kết nối</span>'}</span></div>
+        <div class="kv"><span class="k">Trạng thái</span><span class="v">${url?'<span class="badge ok">Đã kết nối</span>':'<span class="badge danger">Chưa kết nối</span>'}</span></div>
+        <div class="kv"><span class="k">Tự động đồng bộ</span><span class="v">${url?'<span class="badge ok">Đang bật</span>':'—'}</span></div>
         <div class="kv"><span class="k">Đồng bộ gần nhất</span><span class="v">${last}</span></div>
         ${cfg.spreadsheetUrl?`<div class="kv"><span class="k">Bảng tính</span><span class="v"><a href="${cfg.spreadsheetUrl}" target="_blank">Mở Google Sheet</a></span></div>`:''}</div>
-      <div class="field"><label>URL Apps Script (Web App)</label>
-        <input id="syncUrl" value="${esc(cfg.url||'')}" placeholder="https://script.google.com/macros/s/.../exec"></div>
-      <button class="btn block" style="margin-bottom:10px" onclick="saveSyncUrl()">💾 Lưu kết nối</button>
-      <button class="btn ok block" id="syncBtn" onclick="syncNow()">☁️ Đồng bộ ngay</button>
-      <p class="hint" style="margin-top:12px">Chưa có URL? Mở file <b>HUONG_DAN_KET_NOI_GOOGLE.md</b> kèm theo để tạo Apps Script (chỉ làm 1 lần).</p>`,
+      ${embedded
+        ?`<p class="hint">URL Apps Script đã nhúng sẵn trong app — tự đồng bộ mỗi khi có thay đổi. Muốn đổi URL, sửa hằng <b>SYNC_URL</b> ở đầu file index.html.</p>`
+        :`<div class="field"><label>URL Apps Script (Web App)</label>
+            <input id="syncUrl" value="${esc(cfg.url||'')}" placeholder="https://script.google.com/macros/s/.../exec"></div>
+          <button class="btn block" style="margin-bottom:10px" onclick="saveSyncUrl()">💾 Lưu kết nối</button>
+          <p class="hint" style="margin:6px 0 12px">Chưa có URL? Mở file <b>HUONG_DAN_KET_NOI_GOOGLE.md</b> để tạo Apps Script (chỉ làm 1 lần).</p>`}
+      <button class="btn ok block" id="syncBtn" onclick="syncNow()">☁️ Đồng bộ ngay</button>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});
 }
-function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');}
+function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');if(u)scheduleAutoSync();}
 function buildSyncPayload(){
   const all=JSON.parse(JSON.stringify(STORE.all()));const images={};
   function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
@@ -658,18 +669,25 @@ function applyUploaded(map){
       else (ct.customers||[]).forEach(c=>['cccdPhoto','customerPhoto','signature'].forEach(k=>c[k]&&walk(c[k])));});});
   STORE.save();
 }
-async function syncNow(){
-  const cfg=getSync();if(!cfg.url){toast('Chưa cấu hình URL Apps Script','err');return;}
+function syncNow(){doSync(false);}
+async function doSync(isAuto){
+  const url=effectiveUrl();if(!url){if(!isAuto)toast('Chưa cấu hình URL Apps Script','err');return;}
+  if(_syncing){if(!isAuto)scheduleAutoSync();return;}
+  _syncing=true;
   const btn=$('#syncBtn');if(btn){btn.disabled=true;btn.textContent='⏳ Đang đồng bộ…';}
   try{
-    const res=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(buildSyncPayload())});
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(buildSyncPayload())});
     const txt=await res.text();let json;try{json=JSON.parse(txt);}catch(e){throw new Error('Phản hồi không hợp lệ. Kiểm tra lại URL/triển khai Apps Script.');}
     if(!json.ok)throw new Error(json.error||'Lỗi không rõ');
-    applyUploaded(json.uploaded||{});
-    cfg.spreadsheetUrl=json.spreadsheetUrl||cfg.spreadsheetUrl;cfg.lastSync=Date.now();setSync(cfg);
-    toast('Đồng bộ thành công','ok');openSync();
-  }catch(err){toast('Lỗi đồng bộ: '+err.message,'err');}
-  finally{if(btn){btn.disabled=false;btn.textContent='☁️ Đồng bộ ngay';}}
+    _suppressAuto=true;applyUploaded(json.uploaded||{});_suppressAuto=false;
+    const cfg=getSync();cfg.spreadsheetUrl=json.spreadsheetUrl||cfg.spreadsheetUrl;cfg.lastSync=Date.now();setSync(cfg);
+    if(isAuto)toast('✓ Đã đồng bộ','ok');else{toast('Đồng bộ thành công','ok');openSync();}
+  }catch(err){
+    _suppressAuto=false;
+    if(isAuto)toast('Chưa đồng bộ được — sẽ thử lại khi có thay đổi');
+    else toast('Lỗi đồng bộ: '+err.message,'err');
+  }
+  finally{_syncing=false;const b=$('#syncBtn');if(b){b.disabled=false;b.textContent='☁️ Đồng bộ ngay';}}
 }
 
 /* ---------- BACKUP ---------- */
