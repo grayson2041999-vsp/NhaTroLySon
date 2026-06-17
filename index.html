@@ -210,10 +210,51 @@ function fmtDate(s){if(!s)return '—';const p=String(s).split('-');return p.len
 function fmtMonth(s){if(!s)return '—';const p=String(s).split('-');return p.length>=2?`${p[1]}/${p[0]}`:s;}
 function newImg(){return {imgId:uid(),data:null,url:null};}
 function normalizeImg(o){if(!o||typeof o!=='object')return newImg();if(!o.imgId)o.imgId=uid();if(typeof o.data==='undefined')o.data=null;if(typeof o.url==='undefined')o.url=null;return o;}
-function imgSrc(o){return o?(o.data||o.url||''):'';}
-function imgHas(o){return !!(o&&(o.data||o.url));}
+function imgSrc(o){if(!o)return '';if(o.imgId&&IMGCACHE[o.imgId])return IMGCACHE[o.imgId];return o.data||o.url||'';}
+function imgHas(o){return !!(o&&(o.data||o.url||(o.imgId&&IMGCACHE[o.imgId])));}
 function blankCust(){return {name:'',dob:'',phone:'',cccd:'',bienso:'',cccdPhoto:newImg(),customerPhoto:newImg(),signature:newImg()};}
 function normalizeCust(c){c.cccdPhoto=normalizeImg(c.cccdPhoto);c.customerPhoto=normalizeImg(c.customerPhoto);c.signature=normalizeImg(c.signature);return c;}
+
+/* ---------- Lưu ảnh trong IndexedDB (tránh đầy localStorage trên điện thoại) ---------- */
+const IMGCACHE={};            // {imgId: dataURL} bản sao RAM để hiển thị tức thì
+let IDB=null;
+function idbOpen(){return new Promise((res,rej)=>{try{const r=indexedDB.open('nhaTroLySon',1);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'imgId'});};
+  r.onsuccess=()=>{IDB=r.result;res(IDB);};r.onerror=()=>rej(r.error);}catch(e){rej(e);}});}
+function idbPut(imgId,data){return new Promise((res,rej)=>{if(!IDB)return rej(new Error('no-idb'));
+  try{const t=IDB.transaction('images','readwrite');t.objectStore('images').put({imgId,data});t.oncomplete=()=>res();t.onerror=()=>rej(t.error);}catch(e){rej(e);}});}
+function idbAll(){return new Promise((res)=>{if(!IDB)return res([]);
+  try{const t=IDB.transaction('images','readonly');const rq=t.objectStore('images').getAll();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>res([]);}catch(e){res([]);}});}
+async function storeImage(obj,dataUrl){
+  if(!obj.imgId)obj.imgId=uid();
+  IMGCACHE[obj.imgId]=dataUrl;obj.url=null;
+  try{await idbPut(obj.imgId,dataUrl);if('data' in obj)delete obj.data;}
+  catch(e){obj.data=dataUrl;/* dự phòng khi trình duyệt chặn IndexedDB */}
+}
+async function migrateLocalImages(){
+  let changed=false;
+  async function walk(o){if(o&&o.imgId&&o.data){IMGCACHE[o.imgId]=o.data;try{await idbPut(o.imgId,o.data);delete o.data;changed=true;}catch(e){}}}
+  for(const h of STORE.houses()){
+    if(h.manager&&h.manager.signature)await walk(h.manager.signature);
+    for(const ct of (h.contracts||[])){
+      if(ct.managerSignature)await walk(ct.managerSignature);
+      if(ct.type==='KTX'){if(ct.customer)for(const k of ['cccdPhoto','customerPhoto','signature'])if(ct.customer[k])await walk(ct.customer[k]);}
+      else for(const c of (ct.customers||[]))for(const k of ['cccdPhoto','customerPhoto','signature'])if(c[k])await walk(c[k]);
+    }
+  }
+  if(changed){_suppressAuto=true;STORE.save();_suppressAuto=false;}
+}
+
+/* ---------- Ngày tháng: nhập DD/MM/YYYY, hiển thị tiếng Việt ---------- */
+const MONTHS_VI=['','một','hai','ba','tư','năm','sáu','bảy','tám','chín','mười','mười một','mười hai'];
+function maskDmy(v){const d=(v||'').replace(/\D/g,'').slice(0,8);let o=d.slice(0,2);if(d.length>2)o+='/'+d.slice(2,4);if(d.length>4)o+='/'+d.slice(4,8);return o;}
+function maskMy(v){const d=(v||'').replace(/\D/g,'').slice(0,6);let o=d.slice(0,2);if(d.length>2)o+='/'+d.slice(2,6);return o;}
+function dmyToIso(s){s=(s||'').trim();if(!s)return '';const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(!m)return null;const d=+m[1],mo=+m[2],y=+m[3];if(mo<1||mo>12||d<1||d>31)return null;const dt=new Date(y,mo-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return null;return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
+function myToIso(s){s=(s||'').trim();if(!s)return '';const m=s.match(/^(\d{1,2})\/(\d{4})$/);if(!m)return null;const mo=+m[1],y=+m[2];if(mo<1||mo>12)return null;return y+'-'+String(mo).padStart(2,'0');}
+function isoToDmy(s){if(!s)return '';const p=String(s).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s;}
+function isoToMy(s){if(!s)return '';const p=String(s).split('-');return p.length>=2?`${p[1]}/${p[0]}`:s;}
+function fmtDateVi(s){if(!s)return '—';const p=String(s).split('-');if(p.length!==3)return s;return (+p[2])+' tháng '+(MONTHS_VI[+p[1]]||(+p[1]))+' '+(+p[0]);}
+function fmtMonthVi(s){if(!s)return '—';const p=String(s).split('-');if(p.length<2)return s;return 'tháng '+(MONTHS_VI[+p[1]]||(+p[1]))+' '+(+p[0]);}
 
 /* ---------- image resize ---------- */
 function fileToResizedDataURL(file,maxW,q){
@@ -267,20 +308,20 @@ function imgTargetByKey(key){
   if(p[0]==='cust')return {obj:window._ctDraft.customers[+p[1]],field:p[2]};
   return null;
 }
-function applyImg(key,dataUrl){
+async function storeImageForKey(key,dataUrl){
   const t=imgTargetByKey(key);if(!t||!t.obj)return;
   if(!t.obj[t.field]||typeof t.obj[t.field]!=='object')t.obj[t.field]=newImg();
-  t.obj[t.field].data=dataUrl;t.obj[t.field].url=null;updatePreview(key);
+  await storeImage(t.obj[t.field],dataUrl);updatePreview(key);
 }
 function updatePreview(key){
   const t=imgTargetByKey(key);const src=imgSrc(t&&t.obj?t.obj[t.field]:null);
   const el=document.getElementById('prev_'+key.replace(/:/g,'_'));if(el)el.innerHTML=imgSlotInner(src);
 }
 function signFor(key){
-  openSignaturePad('Khách hàng ký tên',(data)=>{
+  openSignaturePad('Khách hàng ký tên',async(data)=>{
     const t=imgTargetByKey(key);if(!t||!t.obj)return;
     if(!t.obj[t.field]||typeof t.obj[t.field]!=='object')t.obj[t.field]=newImg();
-    t.obj[t.field].data=data;t.obj[t.field].url=null;updatePreview(key);
+    await storeImage(t.obj[t.field],data);updatePreview(key);
   });
 }
 /* delegated listener for all photo inputs */
@@ -288,7 +329,7 @@ document.addEventListener('change',async(e)=>{
   const inp=e.target;
   if(inp&&inp.matches&&inp.matches('input[type=file][data-imgkey]')){
     const f=inp.files&&inp.files[0];if(!f)return;
-    try{const url=await fileToResizedDataURL(f,1100,0.72);applyImg(inp.dataset.imgkey,url);}
+    try{const url=await fileToResizedDataURL(f,1100,0.72);await storeImageForKey(inp.dataset.imgkey,url);}
     catch(err){toast('Không đọc được ảnh','err');}
     inp.value='';
   }
@@ -381,7 +422,7 @@ function renderSystem(c){const houses=STORE.houses();
       <div class="info"><div class="nm">${esc(h.name)}</div><div class="ad">${esc(h.address||'—')}</div></div></div>
     <div style="margin:10px 0 12px"><span class="badge ktx">${h.rooms.filter(r=>r.type==='KTX').length} KTX</span>
       <span class="badge tro">${h.rooms.filter(r=>r.type==='TRO').length} phòng trọ</span>
-      <span class="badge warn">HĐ: ${fmtMonth(h.contractStart)}–${fmtMonth(h.contractEnd)}</span>
+      <span class="badge warn">HĐ: ${fmtMonthVi(h.contractStart)} – ${fmtMonthVi(h.contractEnd)}</span>
       ${imgHas(h.manager&&h.manager.signature)?'<span class="badge ok">Đã ký QL</span>':''}</div>
     <div class="row">
       <button class="btn sec sm" onclick="requirePassword(STORE.house('${h.id}'),'Chỉnh sửa nhà',()=>houseForm('${h.id}'))">✏️ Sửa</button>
@@ -415,8 +456,8 @@ function houseForm(id){
         <button type="button" class="btn sec sm" onclick="signManager()">✍️ Ký tên</button>
         <div class="hint">Chữ ký này sẽ tự động gắn vào mọi hợp đồng của nhà.</div></div>
       <div class="sectitle">Thời hạn hợp đồng của nhà</div>
-      <div class="grid2"><div class="field"><label>Từ tháng/năm</label><input id="f_cs" type="month" value="${esc(h.contractStart)}"></div>
-        <div class="field"><label>Đến tháng/năm</label><input id="f_ce" type="month" value="${esc(h.contractEnd)}"></div></div>
+      <div class="grid2"><div class="field"><label>Từ tháng/năm</label><input id="f_cs" inputmode="numeric" placeholder="MM/YYYY" maxlength="7" oninput="this.value=maskMy(this.value)" value="${esc(isoToMy(h.contractStart))}"></div>
+        <div class="field"><label>Đến tháng/năm</label><input id="f_ce" inputmode="numeric" placeholder="MM/YYYY" maxlength="7" oninput="this.value=maskMy(this.value)" value="${esc(isoToMy(h.contractEnd))}"></div></div>
       <div class="sectitle">Bảo mật</div>
       <div class="field"><label>Mật khẩu của nhà <span class="req">*</span></label><input id="f_pw" type="text" value="${esc(h.password)}" placeholder="Mật khẩu để sửa/xoá nhà"></div>
       <div class="field"><label>Câu hỏi gợi ý mật khẩu</label><input id="f_hint" value="${esc(h.passwordHint)}" placeholder="VD: Tên thú cưng đầu tiên?"></div>`,
@@ -425,9 +466,9 @@ function houseForm(id){
       $('#saveHouse',m).onclick=()=>saveHouseForm(h.id,editing);}
   });
 }
-function signManager(){openSignaturePad('Người quản lý ký tên',(data)=>{
+function signManager(){openSignaturePad('Người quản lý ký tên',async(data)=>{
   window._houseDraft.manager.signature=window._houseDraft.manager.signature||newImg();
-  window._houseDraft.manager.signature.data=data;window._houseDraft.manager.signature.url=null;
+  await storeImage(window._houseDraft.manager.signature,data);
   const el=$('#prev_mgrsig');if(el)el.innerHTML=imgSlotInner(data);});}
 function renderRoomRows(){const box=$('#roomList');if(!box)return;
   if(!window._roomDraft.length){box.innerHTML=`<div class="muted center" style="padding:6px">Chưa có phòng nào</div>`;return;}
@@ -444,10 +485,12 @@ function saveHouseForm(id,editing){
   const name=$('#f_name').value.trim(),pw=$('#f_pw').value;
   if(!name){toast('Nhập tên nhà','err');return;}
   if(!pw){toast('Nhập mật khẩu của nhà','err');return;}
+  const cs=myToIso($('#f_cs').value);if(cs===null){toast('Tháng/năm bắt đầu không hợp lệ (MM/YYYY)','err');return;}
+  const ce=myToIso($('#f_ce').value);if(ce===null){toast('Tháng/năm kết thúc không hợp lệ (MM/YYYY)','err');return;}
   const rooms=window._roomDraft.filter(r=>r.name.trim()).map(r=>({id:r.id||uid(),name:r.name.trim(),type:r.type}));
   const patch={name,address:$('#f_addr').value.trim(),rooms,
     manager:{name:$('#f_mgr').value.trim(),birthYear:$('#f_mgryob').value.trim(),signature:window._houseDraft.manager.signature},
-    contractStart:$('#f_cs').value,contractEnd:$('#f_ce').value,password:pw,passwordHint:$('#f_hint').value.trim()};
+    contractStart:cs,contractEnd:ce,password:pw,passwordHint:$('#f_hint').value.trim()};
   if(editing){STORE.updateHouse(id,patch);toast('Đã lưu thay đổi','ok');}
   else{STORE.addHouse({id,...patch,contracts:[]});toast('Đã tạo nhà','ok');}
   const _hm=JSON.parse(JSON.stringify(STORE.house(id)));delete _hm.contracts;
@@ -504,18 +547,18 @@ function showPersonInfo(ctId){
   const mgrBlock=imgHas(mgrSig)?`<div class="sectitle">Chữ ký người quản lý</div><div style="text-align:center"><img class="docthumb" style="height:90px;width:auto" src="${imgSrc(mgrSig)}" onclick="viewImg(this.src)"></div>`:'';
   if(ct.type==='KTX'){const c=ct.customer,g=ct.guardian;
     html=`<span class="badge ktx">Hợp đồng KTX</span>
-      <div class="sectitle">Khách thuê</div>${kv('Họ và tên',c.name)}${kv('Ngày sinh',fmtDate(c.dob))}${kv('Số điện thoại',c.phone)}${kv('Số CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}
+      <div class="sectitle">Khách thuê</div>${kv('Họ và tên',c.name)}${kv('Ngày sinh',fmtDateVi(c.dob))}${kv('Số điện thoại',c.phone)}${kv('Số CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}
       ${imgsRow(c)}
       <div class="sectitle">Người chịu trách nhiệm</div>${kv('Họ và tên',g.name)}${kv('Vai trò',g.role)}${kv('Số điện thoại',g.phone)}
-      <div class="sectitle">Thuê</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDate(ct.rentStart)+' → '+fmtDate(ct.rentEnd))}${kv('Tiền giường/tháng',money(ct.pricePerBed))}
+      <div class="sectitle">Thuê</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDateVi(ct.rentStart)+' → '+fmtDateVi(ct.rentEnd))}${kv('Tiền giường/tháng',money(ct.pricePerBed))}
       ${mgrBlock}`;
   }else{
     html=`<span class="badge tro">Hợp đồng phòng trọ</span>
-      <div class="sectitle">Phòng &amp; thời hạn</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDate(ct.rentStart)+' → '+fmtDate(ct.rentEnd))}
+      <div class="sectitle">Phòng &amp; thời hạn</div>${kv('Phòng',room?room.name:'—')}${kv('Thời hạn',fmtDateVi(ct.rentStart)+' → '+fmtDateVi(ct.rentEnd))}
       <div class="sectitle">Đơn giá</div>${kv('Tiền phòng/tháng',money(ct.pricePerRoom))}${kv('Tiền nước/người',money(ct.waterPerPerson))}${kv('Tiền dịch vụ/người',money(ct.servicePerPerson))}${kv('Tiền xe/xe',money(ct.vehiclePerVehicle))}${kv('Tiền điện/kWh',money(ct.electricPerKwh))}
       <div class="sectitle">Khách thuê (${(ct.customers||[]).length})</div>
       ${(ct.customers||[]).map((c,i)=>`<div class="card" style="margin-bottom:8px"><div style="font-weight:700;margin-bottom:6px">${i+1}. ${esc(c.name)}</div>
-        ${kv('Ngày sinh',fmtDate(c.dob))}${kv('SĐT',c.phone)}${kv('CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}${imgsRow(c)}</div>`).join('')}
+        ${kv('Ngày sinh',fmtDateVi(c.dob))}${kv('SĐT',c.phone)}${kv('CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}${imgsRow(c)}</div>`).join('')}
       ${mgrBlock}`;
   }
   openModal({title:'Thông tin chi tiết',bodyHTML:html,
@@ -533,6 +576,7 @@ function contractForm(type,id){
   else if(type==='KTX')ct={id:uid(),type:'KTX',roomId:'',customer:blankCust(),guardian:{name:'',role:'Bố',phone:''},rentStart:'',rentEnd:'',pricePerBed:''};
   else ct={id:uid(),type:'TRO',roomId:'',customers:[blankCust()],rentStart:'',rentEnd:'',pricePerRoom:'',waterPerPerson:'',servicePerPerson:'',vehiclePerVehicle:'',electricPerKwh:''};
   if(type==='KTX')normalizeCust(ct.customer);else (ct.customers=ct.customers||[]).forEach(normalizeCust);
+  if(type==='TRO')ct.customers.forEach(c=>{c.dob=isoToDmy(c.dob);});
   window._ctDraft=ct;
   const rooms=h.rooms.filter(r=>r.type===type);
   const roomOpts=`<option value="">— Chọn phòng —</option>`+rooms.map(r=>`<option value="${r.id}" ${ct.roomId===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
@@ -541,7 +585,7 @@ function contractForm(type,id){
     body=`<span class="badge ktx">Hợp đồng KTX</span>
       <div class="sectitle">Thông tin khách hàng</div>
       <div class="field"><label>Họ và tên <span class="req">*</span></label><input id="c_name" value="${esc(c.name)}"></div>
-      <div class="grid2"><div class="field"><label>Ngày sinh</label><input id="c_dob" type="date" value="${esc(c.dob)}"></div>
+      <div class="grid2"><div class="field"><label>Ngày sinh</label><input id="c_dob" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(c.dob))}"></div>
         <div class="field"><label>Số điện thoại</label><input id="c_phone" inputmode="tel" value="${esc(c.phone)}"></div></div>
       <div class="grid2"><div class="field"><label>Số CCCD</label><input id="c_cccd" inputmode="numeric" value="${esc(c.cccd)}"></div>
         <div class="field"><label>Biển số xe</label><input id="c_bienso" value="${esc(c.bienso)}" placeholder="(nếu có)"></div></div>
@@ -555,8 +599,8 @@ function contractForm(type,id){
       <div class="sectitle">Thuê</div>
       <div class="field"><label>Chọn phòng <span class="req">*</span></label><select id="c_room">${roomOpts}</select>
         ${rooms.length?'':'<div class="hint" style="color:var(--danger)">Nhà chưa có phòng KTX. Thêm phòng KTX trong Quản lý hệ thống.</div>'}</div>
-      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" type="date" value="${esc(ct.rentStart)}"></div>
-        <div class="field"><label>Đến ngày</label><input id="c_re" type="date" value="${esc(ct.rentEnd)}"></div></div>
+      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentStart))}"></div>
+        <div class="field"><label>Đến ngày</label><input id="c_re" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentEnd))}"></div></div>
       <div class="field"><label>Tiền thuê giường/tháng (₫)</label><input id="c_bed" inputmode="numeric" value="${esc(ct.pricePerBed)}"></div>
       ${mgrSigBlock(h)}`;
   }else{
@@ -566,8 +610,8 @@ function contractForm(type,id){
       <div class="sectitle">Khách hàng</div><div id="custList"></div>
       <button class="btn ghost sm" type="button" onclick="addCust()">＋ Thêm khách hàng</button>
       <div class="sectitle">Thời hạn cho thuê</div>
-      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" type="date" value="${esc(ct.rentStart)}"></div>
-        <div class="field"><label>Đến ngày</label><input id="c_re" type="date" value="${esc(ct.rentEnd)}"></div></div>
+      <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentStart))}"></div>
+        <div class="field"><label>Đến ngày</label><input id="c_re" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentEnd))}"></div></div>
       <div class="sectitle">Đơn giá</div>
       <div class="grid2">
         <div class="field"><label>Tiền thuê phòng/tháng (₫)</label><input id="c_room_price" inputmode="numeric" value="${esc(ct.pricePerRoom)}"></div>
@@ -589,7 +633,7 @@ function renderCustList(){const box=$('#custList');if(!box)return;const cs=windo
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Khách ${i+1}</b>
       ${cs.length>1?`<button class="delx" type="button" onclick="removeCust(${i})">🗑️</button>`:''}</div>
     <div class="field" style="margin-bottom:8px"><label>Họ và tên</label><input value="${esc(c.name)}" oninput="window._ctDraft.customers[${i}].name=this.value"></div>
-    <div class="grid2"><div class="field" style="margin-bottom:8px"><label>Ngày sinh</label><input type="date" value="${esc(c.dob)}" oninput="window._ctDraft.customers[${i}].dob=this.value"></div>
+    <div class="grid2"><div class="field" style="margin-bottom:8px"><label>Ngày sinh</label><input inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${esc(c.dob)}" oninput="this.value=maskDmy(this.value);window._ctDraft.customers[${i}].dob=this.value"></div>
       <div class="field" style="margin-bottom:8px"><label>SĐT</label><input inputmode="tel" value="${esc(c.phone)}" oninput="window._ctDraft.customers[${i}].phone=this.value"></div></div>
     <div class="grid2"><div class="field" style="margin-bottom:8px"><label>CCCD</label><input inputmode="numeric" value="${esc(c.cccd)}" oninput="window._ctDraft.customers[${i}].cccd=this.value"></div>
       <div class="field" style="margin-bottom:8px"><label>Biển số xe</label><input value="${esc(c.bienso)}" placeholder="(nếu có)" oninput="window._ctDraft.customers[${i}].bienso=this.value"></div></div>
@@ -604,10 +648,13 @@ function removeCust(i){window._ctDraft.customers.splice(i,1);renderCustList();}
 function saveContract(type,editing){
   const h=STORE.house(APP.houseId);const ct=window._ctDraft;
   const roomId=$('#c_room').value;if(!roomId){toast('Chọn phòng','err');return;}
-  ct.roomId=roomId;ct.rentStart=$('#c_rs').value;ct.rentEnd=$('#c_re').value;
+  const rs=dmyToIso($('#c_rs').value);if(rs===null){toast('Từ ngày không hợp lệ (DD/MM/YYYY)','err');return;}
+  const re=dmyToIso($('#c_re').value);if(re===null){toast('Đến ngày không hợp lệ (DD/MM/YYYY)','err');return;}
+  ct.roomId=roomId;ct.rentStart=rs;ct.rentEnd=re;
   if(type==='KTX'){
     const name=$('#c_name').value.trim();if(!name){toast('Nhập họ tên khách hàng','err');return;}
-    const c=ct.customer;c.name=name;c.dob=$('#c_dob').value;c.phone=$('#c_phone').value.trim();c.cccd=$('#c_cccd').value.trim();c.bienso=$('#c_bienso').value.trim();
+    const dob=dmyToIso($('#c_dob').value);if(dob===null){toast('Ngày sinh không hợp lệ (DD/MM/YYYY)','err');return;}
+    const c=ct.customer;c.name=name;c.dob=dob;c.phone=$('#c_phone').value.trim();c.cccd=$('#c_cccd').value.trim();c.bienso=$('#c_bienso').value.trim();
     if(!imgHas(c.cccdPhoto)){toast('Bắt buộc: ảnh CCCD','err');return;}
     if(!imgHas(c.customerPhoto)){toast('Bắt buộc: ảnh khách hàng','err');return;}
     if(!imgHas(c.signature)){toast('Bắt buộc: chữ ký khách hàng','err');return;}
@@ -616,6 +663,7 @@ function saveContract(type,editing){
   }else{
     const cs=ct.customers.filter(c=>c.name.trim());if(!cs.length){toast('Thêm ít nhất 1 khách hàng có tên','err');return;}
     for(let i=0;i<cs.length;i++){const c=cs[i];
+      const dob=dmyToIso(c.dob);if(dob===null){toast(`Khách ${i+1}: ngày sinh không hợp lệ (DD/MM/YYYY)`,'err');return;}c.dob=dob;
       if(!imgHas(c.cccdPhoto)){toast(`Khách ${i+1}: thiếu ảnh CCCD`,'err');return;}
       if(!imgHas(c.customerPhoto)){toast(`Khách ${i+1}: thiếu ảnh khách hàng`,'err');return;}
       if(!imgHas(c.signature)){toast(`Khách ${i+1}: thiếu chữ ký`,'err');return;}}
@@ -632,17 +680,17 @@ function saveContract(type,editing){
 
 /* ============================================================ GOOGLE SYNC ============================================================ */
 function getSync(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_sync'))||{};}catch(e){return {};}}
-function setSync(c){localStorage.setItem('nhaTroLySon_sync',JSON.stringify(c));}
+function setSync(c){try{localStorage.setItem('nhaTroLySon_sync',JSON.stringify(c));}catch(e){}}
 function effectiveUrl(){return (SYNC_URL&&SYNC_URL.trim())||(getSync().url||'');}
 let _autoTimer=null,_suppressAuto=false,_syncing=false;
 function onDataChanged(){if(_suppressAuto)return;scheduleFlush();}
 /* ===== Hàng đợi thao tác: gửi từng insert/update/delete theo bản ghi ===== */
 function getOutbox(){try{return JSON.parse(localStorage.getItem('nhaTroLySon_outbox'))||[];}catch(e){return [];}}
-function setOutbox(a){localStorage.setItem('nhaTroLySon_outbox',JSON.stringify(a));}
+function setOutbox(a){try{localStorage.setItem('nhaTroLySon_outbox',JSON.stringify(a));}catch(e){toast('Bộ nhớ tạm đầy — kết nối mạng để đồng bộ','err');}}
 function enqueueOp(op){if(!effectiveUrl())return;const q=getOutbox();q.push(op);setOutbox(q);scheduleFlush();}
 function scheduleFlush(){if(!effectiveUrl())return;clearTimeout(_autoTimer);_autoTimer=setTimeout(flushOutbox,1500);}
 function collectOpImages(op,images){
-  function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
+  function walk(o){if(o&&o.imgId){if(!o.url){const d=o.data||IMGCACHE[o.imgId];if(d)images[o.imgId]=d;}delete o.data;}}
   function ct(c){if(!c)return;if(c.managerSignature)walk(c.managerSignature);
     if(c.type==='KTX'){if(c.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>c.customer[k]&&walk(c.customer[k]));}
     else (c.customers||[]).forEach(x=>['cccdPhoto','customerPhoto','signature'].forEach(k=>x[k]&&walk(x[k])));}
@@ -689,7 +737,7 @@ function openSync(){const cfg=getSync();const embedded=!!(SYNC_URL&&SYNC_URL.tri
 function saveSyncUrl(){const u=$('#syncUrl').value.trim();const c=getSync();c.url=u;setSync(c);toast('Đã lưu kết nối','ok');if(u)doSync(true);}
 function buildSyncPayload(){
   const all=JSON.parse(JSON.stringify(STORE.all()));const images={};
-  function walk(o){if(o&&o.imgId){if(o.data&&!o.url)images[o.imgId]=o.data;delete o.data;}}
+  function walk(o){if(o&&o.imgId){if(!o.url){const d=o.data||IMGCACHE[o.imgId];if(d)images[o.imgId]=d;}delete o.data;}}
   all.houses.forEach(h=>{if(h.manager&&h.manager.signature)walk(h.manager.signature);
     (h.contracts||[]).forEach(ct=>{if(ct.managerSignature)walk(ct.managerSignature);
       if(ct.type==='KTX'){if(ct.customer)['cccdPhoto','customerPhoto','signature'].forEach(k=>ct.customer[k]&&walk(ct.customer[k]));}
@@ -763,8 +811,11 @@ function setTab(t){APP.tab=t;scrollTop();render();}
 function scrollTop(){window.scrollTo(0,0);}
 
 render();
-/* Mở app: gửi thao tác còn tồn (nếu có) -> tải bản mới nhất từ Google về */
+/* Mở app: mở IndexedDB -> nạp cache ảnh -> dọn ảnh cũ khỏi localStorage -> đồng bộ */
 (async function(){
+  try{await idbOpen();const all=await idbAll();all.forEach(x=>{IMGCACHE[x.imgId]=x.data;});}catch(e){}
+  try{await migrateLocalImages();}catch(e){}
+  render();
   if(effectiveUrl()){
     await flushOutbox();
     const ok=await pullFromServer();
