@@ -519,15 +519,41 @@ function renderHouse(c){const h=STORE.house(APP.houseId);if(!h){goEntry();return
 function setTkView(v){APP.tkView=v;render();}
 function renderTabThongKe(c){
   c.innerHTML=`<div class="subbar">
-      <button class="btn ${APP.tkView==='dongtien'?'':'sec'}" onclick="setTkView('dongtien')">💵 Dòng tiền</button>
-      <button class="btn ${APP.tkView==='xe'?'':'sec'}" onclick="setTkView('xe')">🚗 Quản lý xe</button>
+      <button class="btn sm ${APP.tkView==='dongtien'?'':'sec'}" onclick="setTkView('dongtien')">💵 Dòng tiền</button>
+      <button class="btn sm ${APP.tkView==='xe'?'':'sec'}" onclick="setTkView('xe')">🚗 Quản lý xe</button>
+      <button class="btn sm ${APP.tkView==='cccd'?'':'sec'}" onclick="setTkView('cccd')">🪪 CCCD</button>
     </div><div id="tkBody"></div>`;
   const box=$('#tkBody',c);
   if(APP.tkView==='dongtien'){
     box.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">Dòng tiền</h2><p>Đang chuẩn bị xây dựng.</p></div>`;
+  }else if(APP.tkView==='cccd'){
+    renderCCCD(box);
   }else{
     renderVehicles(box);
   }
+}
+/* Thống kê ẢNH CHỤP CCCD của NHÀ ĐANG MỞ; ai chưa có ảnh thì ghi "Chưa nhập" */
+function renderCCCD(box){
+  const h=STORE.house(APP.houseId);if(!h){box.innerHTML='';return;}
+  const byRoom={};let total=0,missing=0;
+  (h.contracts||[]).forEach(ct=>{
+    const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
+    const custs=ct.type==='KTX'?(ct.customer?[ct.customer]:[]):(ct.customers||[]);
+    custs.forEach(cu=>{const has=imgHas(cu.cccdPhoto);(byRoom[roomName]=byRoom[roomName]||[]).push({name:cu.name||'—',src:has?imgSrc(cu.cccdPhoto):''});total++;if(!has)missing++;});
+  });
+  if(!total){box.innerHTML=`<div class="empty"><div class="ic">🪪</div>Nhà này chưa có khách nào.</div>`;return;}
+  const roomNames=Object.keys(byRoom).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true}));
+  let rows='';
+  roomNames.forEach(rn=>{
+    const list=byRoom[rn].sort((a,b)=>a.name.localeCompare(b.name,'vi'));
+    rows+=`<tr class="roomhead"><td colspan="3">🏠 Phòng ${esc(rn)} — ${list.length} khách</td></tr>`;
+    list.forEach((v,i)=>{const cell=v.src?`<img src="${v.src}" style="height:48px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="viewImg(this.src)">`:`<span class="badge danger">Chưa nhập</span>`;
+      rows+=`<tr><td>${i+1}</td><td>${esc(v.name)}</td><td>${cell}</td></tr>`;});
+  });
+  box.innerHTML=`<div class="muted" style="margin-bottom:10px">${esc(h.name)} · Tổng: <b>${total}</b> khách${missing?` · <b style="color:var(--danger)">${missing}</b> chưa có ảnh CCCD`:''}</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>STT</th><th>Họ và tên</th><th>Ảnh CCCD</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
 }
 /* Thống kê xe của NHÀ ĐANG MỞ; nhóm theo phòng; bỏ qua khách không nhập biển số */
 function renderVehicles(box){
