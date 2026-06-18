@@ -263,6 +263,19 @@ function isoToDmy(s){if(!s)return '';const p=String(s).split('-');return p.lengt
 function isoToMy(s){if(!s)return '';const p=String(s).split('-');return p.length>=2?`${p[1]}/${p[0]}`:s;}
 function fmtDateVi(s){if(!s)return '—';const p=String(s).split('-');if(p.length!==3)return s;return (+p[2])+' tháng '+(MONTHS_VI[+p[1]]||(+p[1]))+' '+(+p[0]);}
 function fmtMonthVi(s){if(!s)return '—';const p=String(s).split('-');if(p.length<2)return s;return 'tháng '+(MONTHS_VI[+p[1]]||(+p[1]))+' '+(+p[0]);}
+/* ---------- Đọc số tiền thành chữ (tiếng Việt) ---------- */
+const _DV=['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+function _doc3(n,full){var tr=Math.floor(n/100),ch=Math.floor((n%100)/10),dv=n%10,s=[];
+  if(tr>0){s.push(_DV[tr],'trăm');}else if(full&&(ch>0||dv>0)){s.push('không','trăm');}
+  if(ch>1){s.push(_DV[ch],'mươi');if(dv===1)s.push('mốt');else if(dv===5)s.push('lăm');else if(dv>0)s.push(_DV[dv]);}
+  else if(ch===1){s.push('mười');if(dv===5)s.push('lăm');else if(dv>0)s.push(_DV[dv]);}
+  else if(dv>0){if(tr>0||full)s.push('lẻ');s.push(_DV[dv]);}
+  return s.join(' ');}
+function readViNumber(num){num=Math.floor(Math.abs(Number(num)||0));if(num===0)return 'không';
+  const units=['',' nghìn',' triệu',' tỷ'];let groups=[];while(num>0){groups.push(num%1000);num=Math.floor(num/1000);}
+  let parts=[];for(let i=groups.length-1;i>=0;i--){if(groups[i]===0)continue;parts.push(_doc3(groups[i],i!==groups.length-1)+units[i]);}
+  return parts.join(' ').replace(/\s+/g,' ').trim();}
+function docTien(n){const s=readViNumber(n);return s.charAt(0).toUpperCase()+s.slice(1)+' đồng';}
 
 /* ---------- image resize ---------- */
 function fileToResizedDataURL(file,maxW,q){
@@ -449,6 +462,7 @@ function houseForm(id){
   const h=editing?JSON.parse(JSON.stringify(STORE.house(id))):{id:uid(),name:'',address:'',rooms:[],
     manager:{name:'',birthYear:'',signature:newImg()},contractStart:'',contractEnd:'',password:'',passwordHint:'',contracts:[]};
   if(!h.manager)h.manager={name:'',birthYear:''};h.manager.signature=normalizeImg(h.manager.signature);
+  h.dieu4=h.dieu4||[];h.dieu5=h.dieu5||[];h.dieu6=h.dieu6||[];
   window._houseDraft=h;
   openModal({title:editing?'Chỉnh sửa nhà':'Thêm nhà mới',
     bodyHTML:`
@@ -467,11 +481,20 @@ function houseForm(id){
       <div class="sectitle">Thời hạn hợp đồng của nhà</div>
       <div class="grid2"><div class="field"><label>Từ tháng/năm</label><input id="f_cs" inputmode="numeric" placeholder="MM/YYYY" maxlength="7" oninput="this.value=maskMy(this.value)" value="${esc(isoToMy(h.contractStart))}"></div>
         <div class="field"><label>Đến tháng/năm</label><input id="f_ce" inputmode="numeric" placeholder="MM/YYYY" maxlength="7" oninput="this.value=maskMy(this.value)" value="${esc(isoToMy(h.contractEnd))}"></div></div>
+      <div class="sectitle">Điều khoản hợp đồng KTX</div>
+      <div class="muted" style="font-size:12px;margin:-4px 2px 8px">Các mục nhỏ dưới đây sẽ tự đưa vào hợp đồng khi xuất PDF.</div>
+      <div class="field" style="margin-bottom:8px"><label>Điều 4 — Quyền và nghĩa vụ của Bên A</label>
+        <div id="dieu4List"></div><button class="btn ghost sm" type="button" onclick="addDieu('dieu4')">＋ Thêm mục</button></div>
+      <div class="field" style="margin-bottom:8px"><label>Điều 5 — Quyền và nghĩa vụ của Bên B</label>
+        <div id="dieu5List"></div><button class="btn ghost sm" type="button" onclick="addDieu('dieu5')">＋ Thêm mục</button></div>
+      <div class="field"><label>Điều 6 — Thỏa thuận khác</label>
+        <div id="dieu6List"></div><button class="btn ghost sm" type="button" onclick="addDieu('dieu6')">＋ Thêm mục</button></div>
       <div class="sectitle">Bảo mật</div>
       <div class="field"><label>Mật khẩu của nhà <span class="req">*</span></label><input id="f_pw" type="text" value="${esc(h.password)}" placeholder="Mật khẩu để sửa/xoá nhà"></div>
       <div class="field"><label>Câu hỏi gợi ý mật khẩu</label><input id="f_hint" value="${esc(h.passwordHint)}" placeholder="VD: Tên thú cưng đầu tiên?"></div>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="saveHouse">${editing?'Lưu thay đổi':'Tạo nhà'}</button>`,
-    onMount:(m)=>{window._roomDraft=h.rooms.map(r=>({...r}));renderRoomRows();
+    onMount:(m)=>{window._roomDraft=h.rooms.map(r=>({...r,equipment:(r.equipment||[]).map(e=>({...e}))}));renderRoomRows();
+      renderDieu('dieu4');renderDieu('dieu5');renderDieu('dieu6');
       $('#saveHouse',m).onclick=()=>saveHouseForm(h.id,editing);}
   });
 }
@@ -481,25 +504,54 @@ function signManager(){openSignaturePad('Người quản lý ký tên',async(dat
   const el=$('#prev_mgrsig');if(el)el.innerHTML=imgSlotInner(data);});}
 function renderRoomRows(){const box=$('#roomList');if(!box)return;
   if(!window._roomDraft.length){box.innerHTML=`<div class="muted center" style="padding:6px">Chưa có phòng nào</div>`;return;}
-  box.innerHTML=window._roomDraft.map((r,i)=>`<div class="chiprow">
-    <input style="flex:2" value="${esc(r.name)}" placeholder="Tên phòng" oninput="window._roomDraft[${i}].name=this.value">
-    <select style="flex:1.3" onchange="window._roomDraft[${i}].type=this.value">
-      <option value="KTX" ${r.type==='KTX'?'selected':''}>Phòng KTX</option>
-      <option value="TRO" ${r.type==='TRO'?'selected':''}>Phòng trọ</option></select>
-    <button class="delx" type="button" onclick="removeRoomRow(${i})">🗑️</button></div>`).join('');
+  box.innerHTML=window._roomDraft.map((r,i)=>{
+    if(!r.equipment)r.equipment=[];
+    const detail=r._open?`<div style="margin-top:8px">
+        <div class="field" style="margin-bottom:8px"><label>Số người tối đa</label>
+          <input inputmode="numeric" value="${esc(r.maxPeople||'')}" placeholder="VD: 4" oninput="window._roomDraft[${i}].maxPeople=this.value"></div>
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Đồ dùng / trang thiết bị (tên + tình trạng)</div>
+        ${r.equipment.map((e,j)=>`<div class="chiprow">
+          <input style="flex:2" value="${esc(e.name||'')}" placeholder="Tên đồ dùng" oninput="window._roomDraft[${i}].equipment[${j}].name=this.value">
+          <input style="flex:1.6" value="${esc(e.condition||'')}" placeholder="Tình trạng" oninput="window._roomDraft[${i}].equipment[${j}].condition=this.value">
+          <button class="delx" type="button" onclick="removeEquip(${i},${j})">🗑️</button></div>`).join('')}
+        <button class="btn ghost sm" type="button" onclick="addEquip(${i})">＋ Thêm đồ dùng</button></div>`:'';
+    return `<div class="inline-list">
+      <div class="chiprow">
+        <input style="flex:2" value="${esc(r.name)}" placeholder="Tên phòng" oninput="window._roomDraft[${i}].name=this.value">
+        <select style="flex:1.3" onchange="window._roomDraft[${i}].type=this.value">
+          <option value="KTX" ${r.type==='KTX'?'selected':''}>Phòng KTX</option>
+          <option value="TRO" ${r.type==='TRO'?'selected':''}>Phòng trọ</option></select>
+        <button class="delx" type="button" onclick="removeRoomRow(${i})">🗑️</button>
+      </div>
+      <button class="linkbtn" type="button" style="margin-top:6px" onclick="toggleRoom(${i})">${r._open?'▴ Thu gọn':'▾ Chi tiết (đồ dùng, số người)'}</button>
+      ${detail}</div>`;
+  }).join('');
 }
-function addRoomRow(){window._roomDraft.push({id:uid(),name:'',type:'KTX'});renderRoomRows();}
+function toggleRoom(i){window._roomDraft[i]._open=!window._roomDraft[i]._open;renderRoomRows();}
+function addEquip(i){(window._roomDraft[i].equipment=window._roomDraft[i].equipment||[]).push({name:'',condition:''});renderRoomRows();}
+function removeEquip(i,j){window._roomDraft[i].equipment.splice(j,1);renderRoomRows();}
+function addRoomRow(){window._roomDraft.push({id:uid(),name:'',type:'KTX',maxPeople:'',equipment:[],_open:true});renderRoomRows();}
 function removeRoomRow(i){window._roomDraft.splice(i,1);renderRoomRows();}
+function renderDieu(which){const box=$('#'+which+'List');if(!box)return;const arr=window._houseDraft[which]||[];
+  box.innerHTML=(arr.length?arr.map((t,i)=>`<div class="chiprow">
+    <input style="flex:1" value="${esc(t)}" placeholder="Nội dung mục" oninput="window._houseDraft.${which}[${i}]=this.value">
+    <button class="delx" type="button" onclick="removeDieu('${which}',${i})">🗑️</button></div>`).join(''):`<div class="muted" style="font-size:12px;padding:4px">Chưa có mục nào</div>`);}
+function addDieu(which){(window._houseDraft[which]=window._houseDraft[which]||[]).push('');renderDieu(which);}
+function removeDieu(which,i){window._houseDraft[which].splice(i,1);renderDieu(which);}
 function saveHouseForm(id,editing){
   const name=$('#f_name').value.trim(),pw=$('#f_pw').value;
   if(!name){toast('Nhập tên nhà','err');return;}
   if(!pw){toast('Nhập mật khẩu của nhà','err');return;}
   const cs=myToIso($('#f_cs').value);if(cs===null){toast('Tháng/năm bắt đầu không hợp lệ (MM/YYYY)','err');return;}
   const ce=myToIso($('#f_ce').value);if(ce===null){toast('Tháng/năm kết thúc không hợp lệ (MM/YYYY)','err');return;}
-  const rooms=window._roomDraft.filter(r=>r.name.trim()).map(r=>({id:r.id||uid(),name:r.name.trim(),type:r.type}));
+  const rooms=window._roomDraft.filter(r=>r.name.trim()).map(r=>({id:r.id||uid(),name:r.name.trim(),type:r.type,
+    maxPeople:(r.maxPeople||'').toString().trim(),
+    equipment:(r.equipment||[]).filter(e=>e&&(e.name||'').trim()).map(e=>({name:e.name.trim(),condition:(e.condition||'').trim()}))}));
+  const cleanDieu=a=>(a||[]).map(s=>(s||'').trim()).filter(Boolean);
   const patch={name,address:$('#f_addr').value.trim(),rooms,
     manager:{name:$('#f_mgr').value.trim(),birthYear:$('#f_mgryob').value.trim(),signature:window._houseDraft.manager.signature},
-    contractStart:cs,contractEnd:ce,password:pw,passwordHint:$('#f_hint').value.trim()};
+    contractStart:cs,contractEnd:ce,password:pw,passwordHint:$('#f_hint').value.trim(),
+    dieu4:cleanDieu(window._houseDraft.dieu4),dieu5:cleanDieu(window._houseDraft.dieu5),dieu6:cleanDieu(window._houseDraft.dieu6)};
   if(editing){STORE.updateHouse(id,patch);toast('Đã lưu thay đổi','ok');}
   else{STORE.addHouse({id,...patch,contracts:[]});toast('Đã tạo nhà','ok');}
   const _hm=JSON.parse(JSON.stringify(STORE.house(id)));delete _hm.contracts;
@@ -619,7 +671,8 @@ function showPersonInfo(ctId){
   const mgrSig=ct.managerSignature&&imgHas(ct.managerSignature)?ct.managerSignature:(h.manager&&h.manager.signature);
   const mgrBlock=imgHas(mgrSig)?`<div class="sectitle">Chữ ký người quản lý</div><div style="text-align:center"><img class="docthumb" style="height:90px;width:auto" src="${imgSrc(mgrSig)}" onclick="viewImg(this.src)"></div>`:'';
   if(ct.type==='KTX'){const c=ct.customer,g=ct.guardian;
-    html=`<span class="badge ktx">Hợp đồng KTX</span>
+    html=`<button class="btn ok block" style="margin-bottom:12px" onclick="exportContractPdf('${ct.id}')">📄 Xuất hợp đồng (PDF) & chia sẻ</button>
+      <span class="badge ktx">Hợp đồng KTX</span>
       <div class="sectitle">Khách thuê</div>${kv('Họ và tên',c.name)}${kv('Ngày sinh',fmtDateVi(c.dob))}${kv('Số điện thoại',c.phone)}${kv('Số CCCD',c.cccd)}${kv('Biển số xe',c.bienso)}
       ${imgsRow(c)}
       <div class="sectitle">Người chịu trách nhiệm</div>${kv('Họ và tên',g.name)}${kv('Vai trò',g.role)}${kv('Số điện thoại',g.phone)}
@@ -745,6 +798,83 @@ function saveContract(type,editing){
     h.contracts[idx]=ct;}else h.contracts.push(ct);
   STORE.save();enqueueOp({entity:'contract',type:'upsert',houseId:APP.houseId,contract:JSON.parse(JSON.stringify(ct))});
   closeModal();toast('Đã lưu hợp đồng','ok');render();
+}
+
+/* ============================================================ XUẤT HỢP ĐỒNG PDF ============================================================ */
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[data-src="${src}"]`))return res();
+  const s=document.createElement('script');s.src=src;s.dataset.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('load'));document.head.appendChild(s);});}
+async function ensurePdfMake(){
+  if(window.pdfMake&&window.pdfMake.vfs)return;
+  await loadScript('https://cdn.jsdelivr.net/npm/pdfmake@0.2.7/build/pdfmake.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/pdfmake@0.2.7/build/vfs_fonts.js');
+  if(!(window.pdfMake&&window.pdfMake.vfs))throw new Error('pdfmake');
+}
+function ulOrDots(arr){return (arr&&arr.length)?{ul:arr.slice(),margin:[0,2,0,8]}:{text:'……………………………………',margin:[0,2,0,8]};}
+function sigImgNode(obj){const s=imgSrc(obj);return (s&&s.indexOf('data:')===0)?{image:s,width:120,alignment:'center',margin:[0,6,0,2]}:{text:'\n\n',margin:[0,10,0,0]};}
+function buildKtxDocDef(h,ct){
+  const c=ct.customer||{},g=ct.guardian||{},m=h.manager||{};
+  const room=(h.rooms||[]).find(r=>r.id===ct.roomId)||{};
+  const sp=(ct.rentStart||'').split('-');const ngay=sp[2]||'…',thang=sp[1]||'…',nam=sp[0]||'…';
+  const price=Number(ct.pricePerBed)||0;
+  const eq=(room.equipment||[]).filter(e=>e&&(e.name||'').trim()).map(e=>(e.condition&&e.condition.trim())?`${e.name} — ${e.condition}`:e.name);
+  return {
+    pageSize:'A4',pageMargins:[50,40,50,50],
+    defaultStyle:{font:'Roboto',fontSize:11,lineHeight:1.3},
+    content:[
+      {text:'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',bold:true,alignment:'center'},
+      {text:'Độc lập - Tự do - Hạnh phúc',bold:true,alignment:'center',decoration:'underline',margin:[0,2,0,2]},
+      {text:'------------------',alignment:'center',margin:[0,0,0,8]},
+      {text:'HỢP ĐỒNG THUÊ PHÒNG (KÝ TÚC XÁ)',bold:true,fontSize:14,alignment:'center',margin:[0,0,0,10]},
+      {text:`TP. Hồ Chí Minh, ngày ${ngay} tháng ${thang} năm ${nam}, chúng tôi gồm:`,margin:[0,0,0,8]},
+      {text:[{text:'BÊN CHO THUÊ NHÀ (Gọi tắt là bên A): ',bold:true}]},
+      {text:`Ông/bà: ${m.name||'…'}      Năm sinh: ${m.birthYear||'…'}`,margin:[0,0,0,6]},
+      {text:[{text:'BÊN THUÊ NHÀ (Gọi tắt là bên B): ',bold:true}]},
+      {text:`Ông/bà: ${c.name||'…'}      Ngày sinh: ${fmtDate(c.dob)}      Số điện thoại: ${c.phone||'…'}`},
+      {text:`CCCD số: ${c.cccd||'…'}`},
+      {text:`Người chịu trách nhiệm: ${g.name||'…'}`},
+      {text:`Vai trò: ${g.role||'…'}      Số điện thoại: ${g.phone||'…'}`,margin:[0,0,0,8]},
+      {text:'Điều 1: Phòng cho thuê và mục đích thuê:',bold:true,margin:[0,4,0,2]},
+      {text:`Bên A đồng ý cho Bên B thuê phòng số ${room.name||'…'} tại căn nhà ${h.name||'…'} để ở với số người tối đa là ${room.maxPeople||'…'} người.`},
+      {text:'Đồ dùng, trang thiết bị trong phòng, trong nhà và tình trạng sử dụng:',margin:[0,4,0,2]},
+      ulOrDots(eq),
+      {text:'Điều 2: Thời gian cho thuê:',bold:true,margin:[0,4,0,2]},
+      {text:`Thời gian cho thuê: từ ngày ${isoToDmy(ct.rentStart)||'…/…/…'} đến ngày ${isoToDmy(ct.rentEnd)||'…/…/…'}`,margin:[0,0,0,8]},
+      {text:'Điều 3: Giá cho thuê và thời hạn thanh toán:',bold:true,margin:[0,4,0,2]},
+      {text:`Giá thuê: ${price.toLocaleString('vi-VN')} đồng/tháng`},
+      {text:`(bằng chữ: ${docTien(price)}/tháng)`,italics:true},
+      {text:'Giá thuê trên đã bao gồm mọi chi phí như: tiền phòng, tiền nước, tiền điện, wifi, dịch vụ dọn dẹp, dịch vụ xử lý rác thải và tiền gửi xe.',margin:[0,2,0,4]},
+      {text:'Tiền đặt cọc',bold:true},
+      {text:'Bên B phải đặt cọc cho bên A một khoảng là 2.000.000 đồng (bằng chữ: hai triệu đồng).'},
+      {text:'Tiền cọc và tiền thuê tháng đầu tiên phải được thanh toán ngay sau khi ký kết hợp đồng này.'},
+      {text:'Thời hạn thanh toán tiền thuê phòng: từ ngày 01 (một) đến hết ngày 05 (năm) hàng tháng.',margin:[0,0,0,8]},
+      {text:'ĐIỀU 4: QUYỀN VÀ NGHĨA VỤ CỦA BÊN A',bold:true,margin:[0,4,0,2]},ulOrDots(h.dieu4),
+      {text:'ĐIỀU 5: QUYỀN VÀ NGHĨA VỤ CỦA BÊN B',bold:true,margin:[0,4,0,2]},ulOrDots(h.dieu5),
+      {text:'ĐIỀU 6: THỎA THUẬN KHÁC',bold:true,margin:[0,4,0,2]},ulOrDots(h.dieu6),
+      {columns:[
+        {width:'*',stack:[{text:'BÊN CHO THUÊ (BÊN A)',bold:true,alignment:'center'},{text:'(ký và ghi rõ họ tên)',italics:true,fontSize:10,alignment:'center'},sigImgNode(m.signature),{text:m.name||'',alignment:'center',margin:[0,2,0,0]}]},
+        {width:'*',stack:[{text:'BÊN THUÊ (BÊN B)',bold:true,alignment:'center'},{text:'(ký và ghi rõ họ tên)',italics:true,fontSize:10,alignment:'center'},sigImgNode(c.signature),{text:c.name||'',alignment:'center',margin:[0,2,0,0]}]}
+      ],margin:[0,24,0,0]}
+    ]
+  };
+}
+async function exportContractPdf(ctId){
+  const h=STORE.house(APP.houseId);const ct=(h.contracts||[]).find(x=>x.id===ctId);
+  if(!ct||ct.type!=='KTX'){toast('Chỉ áp dụng hợp đồng KTX','err');return;}
+  toast('Đang tạo PDF…');
+  try{await ensurePdfMake();}catch(e){toast('Cần kết nối mạng để tạo PDF','err');return;}
+  try{
+    const dd=buildKtxDocDef(h,ct);
+    pdfMake.createPdf(dd).getBlob(async(blob)=>{
+      const fname=`HopDong_${((ct.customer&&ct.customer.name)||'KTX').replace(/\s+/g,'_')}.pdf`;
+      const file=new File([blob],fname,{type:'application/pdf'});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file],title:'Hợp đồng thuê phòng'});}catch(e){}
+      }else{
+        const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;a.click();URL.revokeObjectURL(url);
+        toast('Đã tải PDF (thiết bị không hỗ trợ chia sẻ trực tiếp)','ok');
+      }
+    });
+  }catch(e){toast('Không tạo được PDF','err');}
 }
 
 /* ============================================================ GOOGLE SYNC ============================================================ */
