@@ -37,6 +37,8 @@ a{color:var(--primary)}
 .iconbtn{background:rgba(255,255,255,.18);border:none;color:#fff;width:38px;height:38px;border-radius:10px;
   font-size:18px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
 .iconbtn:active{background:rgba(255,255,255,.32)}
+.refreshbtn.spin{animation:spin .8s linear infinite;pointer-events:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 .content{flex:1;padding:16px;padding-bottom:40px}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
@@ -391,12 +393,13 @@ function render(){renderTopbar();renderTabs();const c=$('#content');
   else if(APP.screen==='house')renderHouse(c);}
 
 function renderTopbar(){const tb=$('#topbar');
-  if(APP.screen==='entry'){tb.innerHTML=`<div class="ttl">Nhà trọ Lý Sơn</div>`;}
+  const refresh=`<button class="iconbtn refreshbtn" title="Tải mới" onclick="refreshNow()">↻</button>`;
+  if(APP.screen==='entry'){tb.innerHTML=`<div class="ttl">Nhà trọ Lý Sơn</div>${refresh}`;}
   else if(APP.screen==='system'){tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
-    <div class="ttl">Quản lý hệ thống<div class="sub">Thêm / chỉnh / xoá nhà</div></div>`;}
+    <div class="ttl">Quản lý hệ thống<div class="sub">Thêm / chỉnh / xoá nhà</div></div>${refresh}`;}
   else if(APP.screen==='house'){const h=STORE.house(APP.houseId);
     tb.innerHTML=`<button class="iconbtn" onclick="goEntry()">‹</button>
-      <div class="ttl">${esc(h?h.name:'')}<div class="sub">${esc(h?h.address:'')}</div></div>`;}
+      <div class="ttl">${esc(h?h.name:'')}<div class="sub">${esc(h?h.address:'')}</div></div>${refresh}`;}
 }
 function renderTabs(){const host=$('#tabsHost');
   if(APP.screen!=='house'){host.innerHTML='';return;}
@@ -792,6 +795,21 @@ async function pullFromServer(){
     }
   }catch(e){_suppressAuto=false;}
   return false;
+}
+/* Nút "Tải mới": gửi thay đổi còn tồn -> kéo dữ liệu mới nhất về -> vẽ lại */
+let _refreshing=false;
+async function refreshNow(){
+  if(_refreshing)return;
+  if(!effectiveUrl()){toast('Chưa kết nối Google','err');return;}
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){toast('Không có mạng','err');return;}
+  _refreshing=true;
+  document.querySelectorAll('.refreshbtn').forEach(b=>b.classList.add('spin'));
+  try{
+    await flushOutbox();
+    await pullFromServer();
+    toast('Đã cập nhật','ok');
+  }catch(e){toast('Không tải được','err');}
+  finally{_refreshing=false;render();}
 }
 
 /* ---------- BACKUP ---------- */
