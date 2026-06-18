@@ -985,9 +985,9 @@ function saveFinance(kind,id,editing){
   }
   h.finance=h.finance||[];
   if(editing){const idx=h.finance.findIndex(x=>x.id===id);h.finance[idx]=entry;}else h.finance.push(entry);
-  STORE.save();enqueueHouseUpsert(h.id);closeModal();toast('Đã lưu','ok');render();
+  STORE.save();enqueueOp({entity:'finance',type:'upsert',houseId:h.id,entry:JSON.parse(JSON.stringify(entry))});closeModal();toast('Đã lưu','ok');render();
 }
-function deleteFinance(id){const h=STORE.house(APP.houseId);h.finance=(h.finance||[]).filter(x=>x.id!==id);STORE.save();enqueueHouseUpsert(h.id);toast('Đã xoá','ok');render();}
+function deleteFinance(id){const h=STORE.house(APP.houseId);h.finance=(h.finance||[]).filter(x=>x.id!==id);STORE.save();enqueueOp({entity:'finance',type:'delete',houseId:h.id,id});toast('Đã xoá','ok');render();}
 
 /* ============================================================ XUẤT HỢP ĐỒNG PDF ============================================================ */
 function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[data-src="${src}"]`))return res();
