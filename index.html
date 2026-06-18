@@ -918,10 +918,12 @@ function renderFinanceTab(c,h,kind){
   const total=list.reduce((s,e)=>s+(Number(e.amount)||0),0);
   let rows='';
   if(list.length){
+    const col1=kind==='chi'?'Nội dung':'Đối tượng';
+    const noteHead=kind==='chi'?'':'<th>Ghi chú</th>';
     rows=`<div class="tablewrap"><table>
-      <thead><tr><th>STT</th><th>Đối tượng</th><th>Số tiền</th><th>Ghi chú</th><th>Người</th>${locked?'':'<th></th>'}</tr></thead>
+      <thead><tr><th>STT</th><th>${col1}</th><th>Số tiền</th>${noteHead}<th>Người</th>${locked?'':'<th></th>'}</tr></thead>
       <tbody>${list.map((e,i)=>`<tr>
-        <td>${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td><td>${esc(e.note||'')}</td><td>${esc(e.userName||'')}</td>
+        <td>${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}<td>${esc(e.userName||'')}</td>
         ${locked?'':`<td><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
       </tr>`).join('')}</tbody></table></div>`;
   } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>Chưa có khoản ${title.toLowerCase()} nào trong tháng này.</div>`; }
@@ -939,11 +941,19 @@ function unlockMonthThenRender(id){unlockMonth(id);}
 function financeForm(kind,id){
   const h=STORE.house(APP.houseId);const am=STORE.activeMonth();
   if(!getCurUser()){toast('Hãy chọn "Bạn là" trong Quản trị dòng tiền','err');return;}
-  const editing=!!id;const e=editing?JSON.parse(JSON.stringify((h.finance||[]).find(x=>x.id===id))):{id:uid(),kind,month:am,targetKey:'',amount:'',note:''};
-  const targets=financeTargets(h);
+  const editing=!!id;const e=editing?JSON.parse(JSON.stringify((h.finance||[]).find(x=>x.id===id))):{id:uid(),kind,month:am,targetKey:'',label:'',amount:'',note:''};
   const title=kind==='thu'?'doanh thu':'chi phí';
-  openModal({title:(editing?'Sửa ':'Thêm ')+title,
-    bodyHTML:`
+  let body;
+  if(kind==='chi'){
+    body=`
+      <div class="field"><label>Nội dung chi phí <span class="req">*</span></label>
+        <input id="fContent" value="${esc(e.label||'')}" placeholder="VD: Tiền điện tháng 5"></div>
+      <div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
+        <input id="fAmount" inputmode="numeric" value="${esc(e.amount)}" placeholder="VD: 500000"></div>
+      <div class="hint">Người nhập: <b>${esc(curUserName()||'(chưa chọn)')}</b> · Tháng: <b>${esc(isoToMy(am))}</b></div>`;
+  }else{
+    const targets=financeTargets(h);
+    body=`
       <div class="field"><label>Đối tượng <span class="req">*</span></label>
         <select id="fTarget">
           <option value="">— Chọn khách (KTX) hoặc phòng (trọ) —</option>
@@ -954,18 +964,25 @@ function financeForm(kind,id){
         <input id="fAmount" inputmode="numeric" value="${esc(e.amount)}" placeholder="VD: 1500000"></div>
       <div class="field"><label>Ghi chú</label>
         <textarea id="fNote" rows="2" style="resize:vertical">${esc(e.note||'')}</textarea></div>
-      <div class="hint">Người nhập: <b>${esc(curUserName()||'(chưa chọn)')}</b> · Tháng: <b>${esc(isoToMy(am))}</b></div>`,
+      <div class="hint">Người nhập: <b>${esc(curUserName()||'(chưa chọn)')}</b> · Tháng: <b>${esc(isoToMy(am))}</b></div>`;
+  }
+  openModal({title:(editing?'Sửa ':'Thêm ')+title,bodyHTML:body,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="fSave">${editing?'Lưu':'Thêm'}</button>`,
     onMount:(m)=>{$('#fSave',m).onclick=()=>saveFinance(kind,e.id,editing);}
   });
 }
 function saveFinance(kind,id,editing){
   const h=STORE.house(APP.houseId);const am=STORE.activeMonth();
-  const key=$('#fTarget').value;if(!key){toast('Chọn đối tượng','err');return;}
   const amount=($('#fAmount').value||'').replace(/[^\d]/g,'');if(!amount){toast('Nhập số tiền','err');return;}
-  const t=financeTargets(h).find(x=>x.key===key)||{};
-  const entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:$('#fNote').value.trim(),
-    userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+  let entry;
+  if(kind==='chi'){
+    const content=$('#fContent').value.trim();if(!content){toast('Nhập nội dung chi phí','err');return;}
+    entry={id,kind,month:am,targetType:'',targetKey:'',label:content,amount:amount,note:'',userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+  }else{
+    const key=$('#fTarget').value;if(!key){toast('Chọn đối tượng','err');return;}
+    const t=financeTargets(h).find(x=>x.key===key)||{};
+    entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:$('#fNote').value.trim(),userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+  }
   h.finance=h.finance||[];
   if(editing){const idx=h.finance.findIndex(x=>x.id===id);h.finance[idx]=entry;}else h.finance.push(entry);
   STORE.save();enqueueHouseUpsert(h.id);closeModal();toast('Đã lưu','ok');render();
