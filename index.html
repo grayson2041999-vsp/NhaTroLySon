@@ -834,6 +834,7 @@ async function ensurePdfMake(){
 }
 function ulOrDots(arr){return (arr&&arr.length)?{ul:arr.slice(),margin:[0,2,0,8]}:{text:'……………………………………',margin:[0,2,0,8]};}
 function sigImgNode(obj){const s=imgSrc(obj);return (s&&s.indexOf('data:')===0)?{image:s,fit:[150,55],alignment:'center',margin:[0,6,0,2]}:{text:'\n\n',margin:[0,12,0,0]};}
+function photoNode(obj){const s=imgSrc(obj);return (s&&s.indexOf('data:')===0)?{image:s,fit:[470,330],alignment:'center',margin:[0,4,0,14]}:{text:'(Chưa có ảnh — mở app trên thiết bị đã chụp để xuất kèm ảnh)',italics:true,color:'#888',margin:[0,4,0,14]};}
 function buildKtxDocDef(h,ct){
   const c=ct.customer||{},g=ct.guardian||{},m=h.manager||{};
   const room=(h.rooms||[]).find(r=>r.id===ct.roomId)||{};
@@ -876,7 +877,12 @@ function buildKtxDocDef(h,ct){
       {columns:[
         {width:'*',stack:[{text:'BÊN CHO THUÊ (BÊN A)',bold:true,alignment:'center'},{text:'(ký và ghi rõ họ tên)',italics:true,fontSize:10,alignment:'center'},sigImgNode(m.signature),{text:m.name||'',alignment:'center',margin:[0,2,0,0]}]},
         {width:'*',stack:[{text:'BÊN THUÊ (BÊN B)',bold:true,alignment:'center'},{text:'(ký và ghi rõ họ tên)',italics:true,fontSize:10,alignment:'center'},sigImgNode(c.signature),{text:c.name||'',alignment:'center',margin:[0,2,0,0]}]}
-      ],margin:[0,24,0,0]}
+      ],margin:[0,24,0,0]},
+      {text:'PHỤ LỤC ĐÍNH KÈM HỢP ĐỒNG',bold:true,fontSize:14,alignment:'center',pageBreak:'before',margin:[0,0,0,14]},
+      {text:'Hình ảnh CCCD',bold:true,margin:[0,4,0,2]},
+      photoNode(c.cccdPhoto),
+      {text:'Hình ảnh khách hàng',bold:true,margin:[0,4,0,2]},
+      photoNode(c.customerPhoto)
     ]
   };
 }
