@@ -548,15 +548,15 @@ function syncRoomDom(){const box=$('#roomList');if(!box||!window._roomDraft)retu
     else if(f==='maxp')r.maxPeople=el.value;
     else if(f==='name'||f==='cond'){const j=+el.dataset.eqj;r.equipment=r.equipment||[];r.equipment[j]=r.equipment[j]||{name:'',condition:''};r.equipment[j][f==='name'?'name':'condition']=el.value;}});}
 function syncDieuDom(){if(!window._houseDraft)return;['dieu4','dieu5','dieu6'].forEach(which=>{const box=$('#'+which+'List');if(!box)return;
-  const arr=window._houseDraft[which]=window._houseDraft[which]||[];box.querySelectorAll('input[data-di]').forEach(el=>{arr[+el.dataset.di]=el.value;});});}
+  const arr=window._houseDraft[which]=window._houseDraft[which]||[];box.querySelectorAll('[data-di]').forEach(el=>{arr[+el.dataset.di]=el.value;});});}
 function toggleRoom(i){syncRoomDom();window._roomDraft[i]._open=!window._roomDraft[i]._open;renderRoomRows();}
 function addEquip(i){syncRoomDom();(window._roomDraft[i].equipment=window._roomDraft[i].equipment||[]).push({name:'',condition:''});renderRoomRows();}
 function removeEquip(i,j){syncRoomDom();window._roomDraft[i].equipment.splice(j,1);renderRoomRows();}
 function addRoomRow(){syncRoomDom();window._roomDraft.push({id:uid(),name:'',type:'KTX',maxPeople:'',equipment:[],_open:true});renderRoomRows();}
 function removeRoomRow(i){syncRoomDom();window._roomDraft.splice(i,1);renderRoomRows();}
 function renderDieu(which){const box=$('#'+which+'List');if(!box)return;const arr=window._houseDraft[which]||[];
-  box.innerHTML=(arr.length?arr.map((t,i)=>`<div class="chiprow">
-    <input style="flex:1" data-dieu="${which}" data-di="${i}" value="${esc(t)}" placeholder="Nội dung mục">
+  box.innerHTML=(arr.length?arr.map((t,i)=>`<div class="chiprow" style="align-items:flex-start">
+    <textarea style="flex:1;min-height:64px;resize:vertical;line-height:1.4;padding:10px 12px" rows="2" data-dieu="${which}" data-di="${i}" placeholder="Nội dung mục (Enter để xuống dòng)">${esc(t)}</textarea>
     <button class="delx" type="button" onclick="removeDieu('${which}',${i})">🗑️</button></div>`).join(''):`<div class="muted" style="font-size:12px;padding:4px">Chưa có mục nào</div>`);}
 function addDieu(which){syncDieuDom();(window._houseDraft[which]=window._houseDraft[which]||[]).push('');renderDieu(which);}
 function removeDieu(which,i){syncDieuDom();window._houseDraft[which].splice(i,1);renderDieu(which);}
