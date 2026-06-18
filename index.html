@@ -295,7 +295,7 @@ $('#modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal
 function imgSlotInner(src){return src?`<img src="${src}">`:`<div class="imgph">Chưa có ảnh</div>`;}
 function imgField(key,label,valObj){
   const pid='prev_'+key.replace(/:/g,'_');
-  return `<div class="field"><label>${label} <span class="req">*</span></label>
+  return `<div class="field"><label>${label} <span class="muted" style="font-weight:400;font-size:12px">(nếu có)</span></label>
     <div class="imgslot" id="${pid}">${imgSlotInner(imgSrc(valObj))}</div>
     <div class="imgbtns">
       <label class="btn sec sm">📷 Chụp<input type="file" accept="image/*" capture="environment" data-imgkey="${key}" hidden></label>
@@ -304,7 +304,7 @@ function imgField(key,label,valObj){
 }
 function sigField(key,valObj){
   const pid='prev_'+key.replace(/:/g,'_');
-  return `<div class="field"><label>Chữ ký khách hàng <span class="req">*</span></label>
+  return `<div class="field"><label>Chữ ký khách hàng <span class="muted" style="font-weight:400;font-size:12px">(nếu có)</span></label>
     <div class="imgslot sig" id="${pid}">${imgSlotInner(imgSrc(valObj))}</div>
     <button type="button" class="btn sec sm" onclick="signFor('${key}')">✍️ Ký tên</button></div>`;
 }
@@ -661,18 +661,12 @@ function saveContract(type,editing){
     const name=$('#c_name').value.trim();if(!name){toast('Nhập họ tên khách hàng','err');return;}
     const dob=dmyToIso($('#c_dob').value);if(dob===null){toast('Ngày sinh không hợp lệ (DD/MM/YYYY)','err');return;}
     const c=ct.customer;c.name=name;c.dob=dob;c.phone=$('#c_phone').value.trim();c.cccd=$('#c_cccd').value.trim();c.bienso=$('#c_bienso').value.trim();
-    if(!imgHas(c.cccdPhoto)){toast('Bắt buộc: ảnh CCCD','err');return;}
-    if(!imgHas(c.customerPhoto)){toast('Bắt buộc: ảnh khách hàng','err');return;}
-    if(!imgHas(c.signature)){toast('Bắt buộc: chữ ký khách hàng','err');return;}
     ct.guardian={name:$('#g_name').value.trim(),role:$('#g_role').value,phone:$('#g_phone').value.trim()};
     ct.pricePerBed=$('#c_bed').value;
   }else{
     const cs=ct.customers.filter(c=>c.name.trim());if(!cs.length){toast('Thêm ít nhất 1 khách hàng có tên','err');return;}
     for(let i=0;i<cs.length;i++){const c=cs[i];
-      const dob=dmyToIso(c.dob);if(dob===null){toast(`Khách ${i+1}: ngày sinh không hợp lệ (DD/MM/YYYY)`,'err');return;}c.dob=dob;
-      if(!imgHas(c.cccdPhoto)){toast(`Khách ${i+1}: thiếu ảnh CCCD`,'err');return;}
-      if(!imgHas(c.customerPhoto)){toast(`Khách ${i+1}: thiếu ảnh khách hàng`,'err');return;}
-      if(!imgHas(c.signature)){toast(`Khách ${i+1}: thiếu chữ ký`,'err');return;}}
+      const dob=dmyToIso(c.dob);if(dob===null){toast(`Khách ${i+1}: ngày sinh không hợp lệ (DD/MM/YYYY)`,'err');return;}c.dob=dob;}
     ct.customers=cs;
     ct.pricePerRoom=$('#c_room_price').value;ct.waterPerPerson=$('#c_water').value;ct.servicePerPerson=$('#c_service').value;
     ct.vehiclePerVehicle=$('#c_vehicle').value;ct.electricPerKwh=$('#c_elec').value;
