@@ -280,7 +280,7 @@ function fileToResizedDataURL(file,maxW,q){
 }
 
 /* ---------- app state ---------- */
-const APP={screen:'entry',houseId:null,tab:'hopdong',hdView:'list'};
+const APP={screen:'entry',houseId:null,tab:'hopdong',hdView:'list',tkView:'xe'};
 
 /* ---------- MODAL ---------- */
 function openModal({title,bodyHTML,footHTML,onMount}){
@@ -510,8 +510,46 @@ function saveHouseForm(id,editing){
 /* ============================================================ HOUSE VIEW ============================================================ */
 function renderHouse(c){const h=STORE.house(APP.houseId);if(!h){goEntry();return;}
   if(APP.tab==='hopdong')return renderTabHopDong(c,h);
-  const labels={doanhthu:'Doanh thu',chiphi:'Chi phí',quyettoan:'Quyết toán',thongke:'Thống kê'};
+  if(APP.tab==='thongke')return renderTabThongKe(c);
+  const labels={doanhthu:'Doanh thu',chiphi:'Chi phí',quyettoan:'Quyết toán'};
   c.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">${labels[APP.tab]}</h2><p>Trang này sẽ được hoàn thiện sau.</p></div>`;
+}
+
+/* ---------- TAB THỐNG KÊ ---------- */
+function setTkView(v){APP.tkView=v;render();}
+function renderTabThongKe(c){
+  c.innerHTML=`<div class="subbar">
+      <button class="btn ${APP.tkView==='dongtien'?'':'sec'}" onclick="setTkView('dongtien')">💵 Dòng tiền</button>
+      <button class="btn ${APP.tkView==='xe'?'':'sec'}" onclick="setTkView('xe')">🚗 Quản lý xe</button>
+    </div><div id="tkBody"></div>`;
+  const box=$('#tkBody',c);
+  if(APP.tkView==='dongtien'){
+    box.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">Dòng tiền</h2><p>Đang chuẩn bị xây dựng.</p></div>`;
+  }else{
+    renderVehicles(box);
+  }
+}
+/* Thống kê xe của NHÀ ĐANG MỞ; nhóm theo phòng; bỏ qua khách không nhập biển số */
+function renderVehicles(box){
+  const h=STORE.house(APP.houseId);if(!h){box.innerHTML='';return;}
+  const byRoom={};let total=0;
+  (h.contracts||[]).forEach(ct=>{
+    const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
+    const custs=ct.type==='KTX'?(ct.customer?[ct.customer]:[]):(ct.customers||[]);
+    custs.forEach(cu=>{const bs=(cu.bienso||'').trim();if(bs){(byRoom[roomName]=byRoom[roomName]||[]).push({name:cu.name||'—',bienso:bs});total++;}});
+  });
+  if(!total){box.innerHTML=`<div class="empty"><div class="ic">🚗</div>Nhà này chưa có xe nào được khai báo.<br>Biển số xe được nhập ở từng khách trong hợp đồng.</div>`;return;}
+  const roomNames=Object.keys(byRoom).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true}));
+  let rows='';
+  roomNames.forEach(rn=>{
+    const list=byRoom[rn].sort((a,b)=>a.name.localeCompare(b.name,'vi'));
+    rows+=`<tr class="roomhead"><td colspan="3">🏠 Phòng ${esc(rn)} — ${list.length} xe</td></tr>`;
+    list.forEach((v,i)=>{rows+=`<tr><td>${i+1}</td><td>${esc(v.name)}</td><td>${esc(v.bienso)}</td></tr>`;});
+  });
+  box.innerHTML=`<div class="muted" style="margin-bottom:10px">${esc(h.name)} · Tổng: <b>${total}</b> xe</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>STT</th><th>Họ và tên</th><th>Biển số xe</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
 }
 
 /* ---------- TAB HỢP ĐỒNG ---------- */
