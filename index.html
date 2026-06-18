@@ -140,7 +140,8 @@ tr:last-child td{border-bottom:none}
 .sig-bar{display:flex;align-items:center;gap:10px;padding:12px 14px;color:#fff;background:#111c33}
 .sig-bar #sigTitle{flex:1;font-weight:700}
 .sig-actions{display:flex;gap:8px}
-#sigCanvas{flex:1;background:#fff;touch-action:none;display:block;margin:10px;border-radius:10px}
+.sig-area{flex:1;display:flex;align-items:center;justify-content:center;padding:10px}
+#sigCanvas{width:min(92vw,560px);height:min(38vw,190px);background:#fff;touch-action:none;display:block;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.35)}
 .sig-hint{color:#9fb3d1;text-align:center;padding:0 0 14px;font-size:13px}
 
 /* image viewer */
@@ -164,8 +165,8 @@ tr:last-child td{border-bottom:none}
       <button class="btn sec sm" onclick="closeSig()">Huỷ</button>
       <button class="btn ok sm" onclick="sigSave()">✓ Lưu</button>
     </div></div>
-  <canvas id="sigCanvas"></canvas>
-  <div class="sig-hint">Dùng ngón tay hoặc chuột ký vào khung trắng</div>
+  <div class="sig-area"><canvas id="sigCanvas"></canvas></div>
+  <div class="sig-hint">Dùng ngón tay hoặc chuột ký vào ô trắng</div>
 </div>
 
 <div class="imgviewer" id="imgViewer" onclick="this.classList.remove('show')"></div>
@@ -378,7 +379,19 @@ function bindSig(cv){
 }
 function sigClear(){const cv=$('#sigCanvas');if(!_sig.ctx)return;_sig.ctx.fillStyle='#fff';_sig.ctx.fillRect(0,0,cv.width,cv.height);_sig.has=false;}
 function closeSig(){$('#sigOverlay').classList.remove('show');}
-function sigSave(){if(!_sig.has){toast('Chưa có chữ ký','err');return;}const data=$('#sigCanvas').toDataURL('image/png');closeSig();if(_sig.cb)_sig.cb(data);}
+function trimCanvas(cv){
+  try{
+    const ctx=cv.getContext('2d'),w=cv.width,h=cv.height,px=ctx.getImageData(0,0,w,h).data;
+    let minX=w,minY=h,maxX=0,maxY=0,found=false;
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(px[i]<250||px[i+1]<250||px[i+2]<250){found=true;if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}}
+    if(!found)return cv.toDataURL('image/png');
+    const pad=10;minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(w-1,maxX+pad);maxY=Math.min(h-1,maxY+pad);
+    const cw=maxX-minX+1,ch=maxY-minY+1,out=document.createElement('canvas');out.width=cw;out.height=ch;
+    const o=out.getContext('2d');o.fillStyle='#fff';o.fillRect(0,0,cw,ch);o.drawImage(cv,minX,minY,cw,ch,0,0,cw,ch);
+    return out.toDataURL('image/png');
+  }catch(e){return cv.toDataURL('image/png');}
+}
+function sigSave(){if(!_sig.has){toast('Chưa có chữ ký','err');return;}const data=trimCanvas($('#sigCanvas'));closeSig();if(_sig.cb)_sig.cb(data);}
 
 /* ---------- image viewer ---------- */
 function viewImg(src){const v=$('#imgViewer');v.innerHTML='';const img=new Image();img.src=src;v.appendChild(img);v.classList.add('show');}
@@ -820,7 +833,7 @@ async function ensurePdfMake(){
   if(!(window.pdfMake&&window.pdfMake.vfs))throw new Error('pdfmake');
 }
 function ulOrDots(arr){return (arr&&arr.length)?{ul:arr.slice(),margin:[0,2,0,8]}:{text:'……………………………………',margin:[0,2,0,8]};}
-function sigImgNode(obj){const s=imgSrc(obj);return (s&&s.indexOf('data:')===0)?{image:s,width:120,alignment:'center',margin:[0,6,0,2]}:{text:'\n\n',margin:[0,10,0,0]};}
+function sigImgNode(obj){const s=imgSrc(obj);return (s&&s.indexOf('data:')===0)?{image:s,fit:[150,55],alignment:'center',margin:[0,6,0,2]}:{text:'\n\n',margin:[0,12,0,0]};}
 function buildKtxDocDef(h,ct){
   const c=ct.customer||{},g=ct.guardian||{},m=h.manager||{};
   const room=(h.rooms||[]).find(r=>r.id===ct.roomId)||{};
