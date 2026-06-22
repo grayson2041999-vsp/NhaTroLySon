@@ -610,6 +610,7 @@ function renderHouse(c){const h=STORE.house(APP.houseId);if(!h){goEntry();return
   if(APP.tab==='thongke')return renderTabThongKe(c);
   if(APP.tab==='doanhthu')return renderFinanceTab(c,h,'thu');
   if(APP.tab==='chiphi')return renderFinanceTab(c,h,'chi');
+  if(APP.tab==='quyettoan')return renderTabQuyetToan(c,h);
   const labels={quyettoan:'Quyết toán'};
   c.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">${labels[APP.tab]}</h2><p>Trang này sẽ được hoàn thiện sau.</p></div>`;
 }
@@ -1081,6 +1082,99 @@ function saveFinance(kind,id,editing){
   STORE.save();enqueueOp({entity:'finance',type:'upsert',houseId:h.id,entry:JSON.parse(JSON.stringify(entry))});closeModal();toast('Đã lưu','ok');render();
 }
 function deleteFinance(id){const h=STORE.house(APP.houseId);h.finance=(h.finance||[]).filter(x=>x.id!==id);STORE.save();enqueueOp({entity:'finance',type:'delete',houseId:h.id,id});toast('Đã xoá','ok');render();}
+
+/* ============================================================ TAB QUYẾT TOÁN ============================================================ */
+function qtAvailableMonths(h){
+  const set={};
+  (h.finance||[]).forEach(e=>{if(e.month)set[e.month]=1;});
+  (h.lockedMonths||[]).forEach(m=>{if(m)set[m]=1;});
+  return Object.keys(set).sort().reverse();
+}
+function qtLatestLocked(h){const lm=(h.lockedMonths||[]).slice().sort();return lm.length?lm[lm.length-1]:'';}
+function setQtMonth(m){APP.qtMonth=m;render();}
+/* Bù trừ tối thiểu số lần chuyển: người dư (bal>0) chuyển cho người thiếu (bal<0) */
+function qtSettle(items){
+  const debt=items.filter(p=>p.bal>0.5).map(p=>({name:p.name,amt:p.bal}));
+  const cred=items.filter(p=>p.bal<-0.5).map(p=>({name:p.name,amt:-p.bal}));
+  debt.sort((a,b)=>b.amt-a.amt);cred.sort((a,b)=>b.amt-a.amt);
+  const tx=[];let i=0,j=0;
+  while(i<debt.length&&j<cred.length){
+    const m=Math.min(debt[i].amt,cred[j].amt);
+    if(m>0.5)tx.push({from:debt[i].name,to:cred[j].name,amt:Math.round(m)});
+    debt[i].amt-=m;cred[j].amt-=m;
+    if(debt[i].amt<=0.5)i++;
+    if(cred[j].amt<=0.5)j++;
+  }
+  return tx;
+}
+function renderTabQuyetToan(c,h){
+  const months=qtAvailableMonths(h);
+  if(!months.length){
+    c.innerHTML=`<div class="placeholder-tab"><div class="ic">📊</div><h2 style="margin:0 0 6px">Quyết toán</h2><p>Chưa có khoản thu/chi nào để quyết toán.</p></div>`;return;
+  }
+  let month=APP.qtMonth;
+  if(!month||months.indexOf(month)<0)month=qtLatestLocked(h)||months[0];
+  const locked=(h.lockedMonths||[]).includes(month);
+  const entries=(h.finance||[]).filter(e=>e.month===month);
+  // Gom thu/chi theo người (ai nhập = người giữ tiền)
+  const usersList=STORE.users()||[];const byId={};
+  usersList.forEach(u=>{byId[u.id]={id:u.id,name:u.name||'(chưa đặt tên)',thu:0,chi:0};});
+  entries.forEach(e=>{
+    const id=e.userId||('nm:'+(e.userName||'?'));
+    if(!byId[id])byId[id]={id:id,name:e.userName||'(không rõ)',thu:0,chi:0};
+    const v=Number(e.amount)||0;
+    if(e.kind==='thu')byId[id].thu+=v;else if(e.kind==='chi')byId[id].chi+=v;
+  });
+  const parts=Object.values(byId);
+  const N=parts.length;
+  const revenue=parts.reduce((s,p)=>s+p.thu,0);
+  const cost=parts.reduce((s,p)=>s+p.chi,0);
+  const profit=revenue-cost;
+  const target=N?profit/N:0;
+  parts.forEach(p=>{p.net=p.thu-p.chi;p.bal=p.net-target;});
+  const tx=qtSettle(parts.map(p=>({name:p.name,bal:p.bal})));
+
+  const monthOpts=months.map(m=>`<option value="${m}" ${m===month?'selected':''}>tháng ${esc(isoToMy(m))}${(h.lockedMonths||[]).includes(m)?' 🔒':''}</option>`).join('');
+  const lockBadge=locked?`<span class="badge">🔒 Đã khoá</span>`:`<span class="badge danger">Chưa khoá</span>`;
+  const partRows=parts.map(p=>{
+    const col=p.bal>0.5?'#b45309':(p.bal<-0.5?'#16a34a':'inherit');
+    return `<tr><td>${esc(p.name)}</td><td>${money(p.thu)}</td><td>${money(p.chi)}</td>
+      <td>${money(p.net)}</td><td>${money(Math.round(target))}</td>
+      <td style="color:${col};font-weight:600">${p.bal>0.5?'+':''}${money(Math.round(p.bal))}</td></tr>`;
+  }).join('');
+  const txHTML=tx.length?tx.map(t=>`<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+      <div><b>${esc(t.from)}</b> &nbsp;→&nbsp; <b>${esc(t.to)}</b></div>
+      <div style="font-weight:800;font-size:17px">${money(t.amt)}</div></div>`).join('')
+    :`<div class="empty"><div class="ic">✓</div>Đã cân bằng — không cần chuyển tiền.</div>`;
+
+  c.innerHTML=`
+    <div class="card" style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div class="field" style="margin:0;flex:1;min-width:160px"><label style="font-size:13px">Tháng quyết toán</label>
+        <select onchange="setQtMonth(this.value)">${monthOpts}</select></div>
+      <div style="padding-bottom:6px">${lockBadge}</div>
+    </div>
+    ${locked?'':`<div class="hint" style="color:var(--danger);margin-bottom:10px">Lưu ý: tháng này CHƯA khoá — số liệu có thể còn thay đổi.</div>`}
+    <div class="card" style="margin-bottom:12px">
+      <div class="grid2">
+        <div><div class="muted" style="font-size:13px">Doanh thu</div><div style="font-weight:800;font-size:18px">${money(revenue)}</div></div>
+        <div><div class="muted" style="font-size:13px">Chi phí</div><div style="font-weight:800;font-size:18px">${money(cost)}</div></div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <span class="muted" style="font-size:13px">Lợi nhuận (Doanh thu − Chi phí)</span>
+        <div style="font-weight:800;font-size:22px;color:${profit>=0?'#16a34a':'var(--danger)'}">${money(profit)}</div>
+        <div class="muted" style="font-size:13px;margin-top:2px">Chia đều ${N} người · mỗi người: <b>${money(Math.round(target))}</b></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:700;margin-bottom:8px">Chi tiết theo người</div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Người</th><th>Thu</th><th>Chi</th><th>Lãi ròng</th><th>Phần chia</th><th>Chênh lệch</th></tr></thead>
+        <tbody>${partRows}</tbody></table></div>
+      <div class="hint" style="margin-top:6px">Chênh lệch <b style="color:#b45309">+</b> = đang giữ dư phần của mình → chuyển bớt cho người khác. <b style="color:#16a34a">−</b> = được nhận về.</div>
+    </div>
+    <div style="font-weight:700;margin:6px 0 8px">Bù trừ & chuyển tiền</div>
+    ${txHTML}`;
+}
 
 /* ============================================================ XUẤT HỢP ĐỒNG PDF ============================================================ */
 function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[data-src="${src}"]`))return res();
