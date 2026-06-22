@@ -263,6 +263,9 @@ async function migrateLocalImages(){
 const MONTHS_VI=['','một','hai','ba','tư','năm','sáu','bảy','tám','chín','mười','mười một','mười hai'];
 function maskDmy(v){const d=(v||'').replace(/\D/g,'').slice(0,8);let o=d.slice(0,2);if(d.length>2)o+='/'+d.slice(2,4);if(d.length>4)o+='/'+d.slice(4,8);return o;}
 function maskMy(v){const d=(v||'').replace(/\D/g,'').slice(0,6);let o=d.slice(0,2);if(d.length>2)o+='/'+d.slice(2,6);return o;}
+/* ---------- Định dạng tiền: chèn dấu chấm phân cách hàng nghìn khi nhập ---------- */
+function maskThousand(v){const d=String(v==null?'':v).replace(/\D/g,'');return d?Number(d).toLocaleString('vi-VN'):'';}
+function unmask(v){return String(v==null?'':v).replace(/\D/g,'');}
 function dmyToIso(s){s=(s||'').trim();if(!s)return '';const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(!m)return null;const d=+m[1],mo=+m[2],y=+m[3];if(mo<1||mo>12||d<1||d>31)return null;const dt=new Date(y,mo-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return null;return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
 function myToIso(s){s=(s||'').trim();if(!s)return '';const m=s.match(/^(\d{1,2})\/(\d{4})$/);if(!m)return null;const mo=+m[1],y=+m[2];if(mo<1||mo>12)return null;return y+'-'+String(mo).padStart(2,'0');}
 function isoToDmy(s){if(!s)return '';const p=String(s).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s;}
@@ -363,6 +366,11 @@ document.addEventListener('change',async(e)=>{
     catch(err){toast('Không đọc được ảnh','err');}
     inp.value='';
   }
+});
+/* Tự chèn dấu chấm phân cách hàng nghìn cho mọi ô có thuộc tính data-money */
+document.addEventListener('input',(e)=>{
+  const el=e.target;
+  if(el&&el.matches&&el.matches('input[data-money]')){el.value=maskThousand(el.value);}
 });
 
 /* ---------- SIGNATURE PAD ---------- */
@@ -919,6 +927,18 @@ function renderFinanceTab(c,h,kind){
   const locked=(h.lockedMonths||[]).includes(am);
   const list=(h.finance||[]).filter(e=>e.month===am&&e.kind===kind);
   const total=list.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  // Việc 1: tóm tắt "chưa đóng" (chỉ ở tab Doanh thu)
+  let chuaDong='';
+  if(kind==='thu'){
+    const targets=financeTargets(h);
+    const used=new Set(list.map(e=>e.targetKey));
+    const remain=targets.filter(t=>!used.has(t.key));
+    if(targets.length){
+      chuaDong=`<div class="card" style="margin-bottom:12px">
+        <div style="font-weight:700;margin-bottom:4px">Chưa đóng: ${remain.length}/${targets.length}</div>
+        <div class="muted" style="font-size:13px">${remain.length?remain.map(t=>esc(t.label)).join(' · '):'Đã thu đủ tất cả đối tượng trong tháng. ✓'}</div></div>`;
+    }
+  }
   let rows='';
   if(list.length){
     const col1=kind==='chi'?'Nội dung':'Đối tượng';
@@ -937,6 +957,7 @@ function renderFinanceTab(c,h,kind){
       <div>${locked?`<span class="badge danger">Đã khoá</span> <button class="btn ok sm" onclick="unlockMonthThenRender('${h.id}')">🔓 Mở khoá</button>`
                     :`<button class="btn sm" onclick="lockMonth('${h.id}')">🔒 Khoá tháng</button>`}</div>
     </div>
+    ${chuaDong}
     ${locked?'':`<button class="btn block" style="margin-bottom:12px" onclick="financeForm('${kind}')">＋ Thêm khoản ${title.toLowerCase()}</button>`}
     ${rows}`;
 }
@@ -952,28 +973,93 @@ function financeForm(kind,id){
       <div class="field"><label>Nội dung chi phí <span class="req">*</span></label>
         <input id="fContent" value="${esc(e.label||'')}" placeholder="VD: Tiền điện tháng 5"></div>
       <div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
-        <input id="fAmount" inputmode="numeric" value="${esc(e.amount)}" placeholder="VD: 500000"></div>
+        <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}" placeholder="VD: 500.000"></div>
       <div class="hint">Người nhập: <b>${esc(curUserName()||'(chưa chọn)')}</b> · Tháng: <b>${esc(isoToMy(am))}</b></div>`;
   }else{
     const targets=financeTargets(h);
+    // Việc 1: ẩn khỏi drop-list những đối tượng đã có khoản thu trong tháng (trừ chính khoản đang sửa)
+    const usedKeys=new Set((h.finance||[]).filter(x=>x.kind==='thu'&&x.month===am&&x.id!==e.id).map(x=>x.targetKey));
+    const avail=targets.filter(t=>!usedKeys.has(t.key));
     body=`
       <div class="field"><label>Đối tượng <span class="req">*</span></label>
-        <select id="fTarget">
+        <select id="fTarget" onchange="onFinTargetChange()">
           <option value="">— Chọn khách (KTX) hoặc phòng (trọ) —</option>
-          ${targets.map(t=>`<option value="${t.key}" ${e.targetKey===t.key?'selected':''}>${esc(t.label)}</option>`).join('')}
+          ${avail.map(t=>`<option value="${t.key}" ${e.targetKey===t.key?'selected':''}>${esc(t.label)}</option>`).join('')}
         </select>
-        ${targets.length?'':'<div class="hint" style="color:var(--danger)">Nhà chưa có khách KTX hay phòng trọ nào.</div>'}</div>
-      <div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
-        <input id="fAmount" inputmode="numeric" value="${esc(e.amount)}" placeholder="VD: 1500000"></div>
+        ${targets.length?(avail.length?'':'<div class="hint" style="color:#16a34a">Tất cả đối tượng đã đóng trong tháng này. ✓</div>'):'<div class="hint" style="color:var(--danger)">Nhà chưa có khách KTX hay phòng trọ nào.</div>'}</div>
+      <div id="fAmountZone"></div>
       <div class="field"><label>Ghi chú</label>
         <textarea id="fNote" rows="2" style="resize:vertical">${esc(e.note||'')}</textarea></div>
       <div class="hint">Người nhập: <b>${esc(curUserName()||'(chưa chọn)')}</b> · Tháng: <b>${esc(isoToMy(am))}</b></div>`;
   }
   openModal({title:(editing?'Sửa ':'Thêm ')+title,bodyHTML:body,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="fSave">${editing?'Lưu':'Thêm'}</button>`,
-    onMount:(m)=>{$('#fSave',m).onclick=()=>saveFinance(kind,e.id,editing);}
+    onMount:(m)=>{$('#fSave',m).onclick=()=>saveFinance(kind,e.id,editing);
+      if(kind==='thu'){window._finEdit=e;window._finBreakdown=null;renderAmountZone();}}
   });
 }
+/* ----- Việc 2: vùng nhập số tiền thay đổi theo đối tượng (KTX / phòng trọ) ----- */
+function onFinTargetChange(){const e=window._finEdit;if(e){e.amount='';e.breakdown=null;}window._finBreakdown=null;renderAmountZone();}
+function renderAmountZone(){
+  const zone=$('#fAmountZone');if(!zone)return;
+  const h=STORE.house(APP.houseId);const e=window._finEdit||{};
+  const key=($('#fTarget')&&$('#fTarget').value)||'';
+  if(!key){zone.innerHTML=`<div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
+      <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}" placeholder="Chọn đối tượng ở trên"></div>`;return;}
+  if(key.indexOf('ktx:')===0){
+    const ct=(h.contracts||[]).find(c=>'ktx:'+c.id===key);
+    const price=ct?Number(ct.pricePerBed)||0:0;
+    zone.innerHTML=`<div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
+      <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}" placeholder="VD: 1.800.000">
+      ${price?`<button type="button" class="btn sec sm" style="margin-top:8px" onclick="autoFillAmount('${price}')">⚡ Tự động theo hợp đồng (${money(price)})</button>`
+              :`<div class="hint">Hợp đồng chưa khai tiền giường/tháng.</div>`}</div>`;
+  }else if(key.indexOf('tro:')===0){
+    const roomId=key.slice(4);
+    const ct=(h.contracts||[]).find(c=>c.type==='TRO'&&c.roomId===roomId);
+    if(!ct){zone.innerHTML=`<div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
+        <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}"></div>
+        <div class="hint" style="color:var(--danger)">Phòng này chưa có hợp đồng trọ để tính tự động — nhập tay số tiền.</div>`;return;}
+    const persons=(ct.customers||[]).length;
+    const vehicles=(ct.customers||[]).filter(c=>(c.bienso||'').trim()).length;
+    const b=e.breakdown||{};
+    zone.innerHTML=`
+      <div class="hint" style="margin-bottom:8px">Số người: <b>${persons}</b> · Số xe: <b>${vehicles}</b> · Giá điện: <b>${money(ct.electricPerKwh)}/kWh</b></div>
+      <div class="field"><label>Số điện tiêu thụ tháng này (kWh)</label>
+        <input id="fKwh" inputmode="numeric" value="${esc(b.kwh!=null?b.kwh:'')}" placeholder="VD: 50"></div>
+      <button type="button" class="btn sec sm" onclick="calcTro('${roomId}')">🧮 Tính tự động</button>
+      <div id="troResult" style="margin-top:10px">${(e.amount?troResultHTML(b,e.amount):'')}</div>
+      <input type="hidden" id="fAmount" value="${esc(unmask(e.amount))}">`;
+  }
+}
+function autoFillAmount(price){const el=$('#fAmount');if(el){el.value=maskThousand(price);}}
+function calcTro(roomId){
+  const h=STORE.house(APP.houseId);
+  const ct=(h.contracts||[]).find(c=>c.type==='TRO'&&c.roomId===roomId);if(!ct)return;
+  const persons=(ct.customers||[]).length;
+  const vehicles=(ct.customers||[]).filter(c=>(c.bienso||'').trim()).length;
+  const kwh=Number(unmask(($('#fKwh')&&$('#fKwh').value)||''))||0;
+  const room=Number(ct.pricePerRoom)||0;
+  const water=(Number(ct.waterPerPerson)||0)*persons;
+  const service=(Number(ct.servicePerPerson)||0)*persons;
+  const vehicle=(Number(ct.vehiclePerVehicle)||0)*vehicles;
+  const elec=(Number(ct.electricPerKwh)||0)*kwh;
+  const total=room+water+service+vehicle+elec;
+  const b={kwh,persons,vehicles,room,water,service,vehicle,elec};
+  window._finBreakdown=b;
+  const fa=$('#fAmount');if(fa)fa.value=String(total);
+  const tr=$('#troResult');if(tr)tr.innerHTML=troResultHTML(b,total);
+}
+function troResultHTML(b,total){
+  if(!b||b.room==null)return `<div class="card"><b>Tổng: ${money(total)}</b></div>`;
+  return `<div class="card" style="font-size:14px;line-height:1.7">
+    <div>Tiền phòng: <b>${money(b.room)}</b></div>
+    <div>Tiền điện: ${b.kwh||0} kWh → <b>${money(b.elec)}</b></div>
+    <div>Tiền nước: ${b.persons} người → <b>${money(b.water)}</b></div>
+    <div>Tiền dịch vụ: ${b.persons} người → <b>${money(b.service)}</b></div>
+    <div>Tiền xe: ${b.vehicles} xe → <b>${money(b.vehicle)}</b></div>
+    <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;font-weight:800">Tổng: ${money(total)}</div></div>`;
+}
+function troNoteText(b){if(!b)return '';return `Phòng ${money(b.room)} + Điện ${b.kwh||0}kWh ${money(b.elec)} + Nước ${money(b.water)} + DV ${money(b.service)} + Xe ${money(b.vehicle)}`;}
 function saveFinance(kind,id,editing){
   const h=STORE.house(APP.houseId);const am=STORE.activeMonth();
   const amount=($('#fAmount').value||'').replace(/[^\d]/g,'');if(!amount){toast('Nhập số tiền','err');return;}
@@ -984,7 +1070,11 @@ function saveFinance(kind,id,editing){
   }else{
     const key=$('#fTarget').value;if(!key){toast('Chọn đối tượng','err');return;}
     const t=financeTargets(h).find(x=>x.key===key)||{};
-    entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:$('#fNote').value.trim(),userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+    const bd=window._finBreakdown||(window._finEdit&&window._finEdit.breakdown)||null;
+    let note=$('#fNote').value.trim();
+    if(!note&&bd)note=troNoteText(bd);
+    entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:note,userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+    if(bd)entry.breakdown=bd;
   }
   h.finance=h.finance||[];
   if(editing){const idx=h.finance.findIndex(x=>x.id===id);h.finance[idx]=entry;}else h.finance.push(entry);
