@@ -213,6 +213,17 @@ const $=(s,el=document)=>el.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=(n)=>{n=Number(n)||0;return n.toLocaleString('vi-VN')+' ₫';};
+/* Bảng màu gán CỐ ĐỊNH theo từng người (dùng chung Doanh thu / Chi phí / Quyết toán) */
+const PERSON_COLORS=[
+  {bar:'#3b82f6',bg:'#eff6ff'},{bar:'#f59e0b',bg:'#fffbeb'},{bar:'#10b981',bg:'#ecfdf5'},
+  {bar:'#ec4899',bg:'#fdf2f8'},{bar:'#8b5cf6',bg:'#f5f3ff'},{bar:'#14b8a6',bg:'#f0fdfa'},
+  {bar:'#ef4444',bg:'#fef2f2'},{bar:'#6366f1',bg:'#eef2ff'}];
+function personColor(key){
+  const users=STORE.users()||[];
+  let idx=users.findIndex(u=>u.id===key);
+  if(idx<0){let h=0;const s=String(key||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;idx=h;}
+  return PERSON_COLORS[((idx%PERSON_COLORS.length)+PERSON_COLORS.length)%PERSON_COLORS.length];
+}
 function toast(m,t=''){const e=$('#toast');e.textContent=m;e.className='toast show '+t;clearTimeout(e._t);e._t=setTimeout(()=>e.className='toast',2400);}
 function fmtDate(s){if(!s)return '—';const p=String(s).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s;}
 function fmtMonth(s){if(!s)return '—';const p=String(s).split('-');return p.length>=2?`${p[1]}/${p[0]}`:s;}
@@ -946,10 +957,10 @@ function renderFinanceTab(c,h,kind){
     const noteHead=kind==='chi'?'':'<th>Ghi chú</th>';
     rows=`<div class="tablewrap"><table>
       <thead><tr><th>STT</th><th>${col1}</th><th>Số tiền</th>${noteHead}<th>Người</th>${locked?'':'<th></th>'}</tr></thead>
-      <tbody>${list.map((e,i)=>`<tr>
-        <td>${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}<td>${esc(e.userName||'')}</td>
+      <tbody>${list.map((e,i)=>{const col=personColor(e.userId||('nm:'+(e.userName||'?')));return `<tr style="background:${col.bg}">
+        <td style="border-left:4px solid ${col.bar}">${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}<td>${esc(e.userName||'')}</td>
         ${locked?'':`<td><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
-      </tr>`).join('')}</tbody></table></div>`;
+      </tr>`;}).join('')}</tbody></table></div>`;
   } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>Chưa có khoản ${title.toLowerCase()} nào trong tháng này.</div>`; }
   c.innerHTML=`
     <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -1137,13 +1148,15 @@ function renderTabQuyetToan(c,h){
   const monthOpts=months.map(m=>`<option value="${m}" ${m===month?'selected':''}>tháng ${esc(isoToMy(m))}${(h.lockedMonths||[]).includes(m)?' 🔒':''}</option>`).join('');
   const lockBadge=locked?`<span class="badge">🔒 Đã khoá</span>`:`<span class="badge danger">Chưa khoá</span>`;
   const partRows=parts.map(p=>{
+    const pc=personColor(p.id);
     const col=p.bal>0.5?'#b45309':(p.bal<-0.5?'#16a34a':'inherit');
-    return `<tr><td>${esc(p.name)}</td><td>${money(p.thu)}</td><td>${money(p.chi)}</td>
+    return `<tr style="background:${pc.bg}"><td style="border-left:4px solid ${pc.bar}">${esc(p.name)}</td><td>${money(p.thu)}</td><td>${money(p.chi)}</td>
       <td>${money(p.net)}</td><td>${money(Math.round(target))}</td>
       <td style="color:${col};font-weight:600">${p.bal>0.5?'+':''}${money(Math.round(p.bal))}</td></tr>`;
   }).join('');
+  const nameCol={};parts.forEach(p=>{nameCol[p.name]=personColor(p.id).bar;});
   const txHTML=tx.length?tx.map(t=>`<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-      <div><b>${esc(t.from)}</b> &nbsp;→&nbsp; <b>${esc(t.to)}</b></div>
+      <div><b style="color:${nameCol[t.from]||'inherit'}">${esc(t.from)}</b> &nbsp;→&nbsp; <b style="color:${nameCol[t.to]||'inherit'}">${esc(t.to)}</b></div>
       <div style="font-weight:800;font-size:17px">${money(t.amt)}</div></div>`).join('')
     :`<div class="empty"><div class="ic">✓</div>Đã cân bằng — không cần chuyển tiền.</div>`;
 
