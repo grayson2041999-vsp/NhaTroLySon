@@ -120,6 +120,13 @@ tr:last-child td{border-bottom:none}
   .fin-thu .c-note{width:44px}
   .fin-table .c-act{width:54px}
   /* cột Đối tượng / Nội dung (.c-obj) tự nhận phần rộng còn lại */
+  /* ===== Bảng Thống kê (Quản lý xe / CCCD): hiện đủ 3 cột, không cuộn ngang ===== */
+  .stat-table{min-width:0;width:100%;table-layout:fixed}
+  .stat-table th,.stat-table td{padding:8px 6px;word-break:break-word}
+  .stat-table th:nth-child(1),.stat-table td:nth-child(1){width:30px;text-align:center;padding-left:2px;padding-right:2px}
+  .stat-xe th:nth-child(3),.stat-xe td:nth-child(3){width:104px;white-space:nowrap}
+  .stat-cccd th:nth-child(3),.stat-cccd td:nth-child(3){width:90px}
+  /* cột Họ và tên (giữa) tự nhận phần còn lại */
 }
 .roomhead td{background:var(--primary-light);font-weight:700;color:var(--primary-dark)}
 .linkbtn{background:none;border:none;color:var(--primary);font-weight:600;text-decoration:underline;padding:0}
@@ -334,19 +341,24 @@ function openModal({title,bodyHTML,footHTML,onMount}){
   $('#modalBg').classList.add('show');
   if(onMount)onMount($('#modal'));
 }
-function closeModal(){$('#modalBg').classList.remove('show');}
+function closeModal(){if(window._cccdStream){try{window._cccdStream.getTracks().forEach(t=>t.stop());}catch(e){}window._cccdStream=null;}$('#modalBg').classList.remove('show');}
 $('#modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal();});
 
 /* ---------- IMAGE / SIGNATURE FIELD HELPERS ---------- */
 function imgSlotInner(src){return src?`<img src="${src}">`:`<div class="imgph">Chưa có ảnh</div>`;}
 function imgField(key,label,valObj){
   const pid='prev_'+key.replace(/:/g,'_');
+  const isCccd=/cccdPhoto$/.test(key);
+  const btns=isCccd
+    ? `<button type="button" class="btn sec sm" onclick="openCccdCamera('${key}')">📷 Chụp CCCD</button>
+       <label class="btn sec sm">🖼️ Chọn ảnh<input type="file" accept="image/*" data-imgkey="${key}" data-crop="cccd" hidden></label>
+       <input type="file" accept="image/*" capture="environment" data-imgkey="${key}" data-crop="cccd" id="fbcap_${pid}" hidden>`
+    : `<label class="btn sec sm">📷 Chụp<input type="file" accept="image/*" capture="environment" data-imgkey="${key}" hidden></label>
+       <label class="btn sec sm">🖼️ Chọn ảnh<input type="file" accept="image/*" data-imgkey="${key}" hidden></label>`;
   return `<div class="field"><label>${label} <span class="muted" style="font-weight:400;font-size:12px">(nếu có)</span></label>
     <div class="imgslot" id="${pid}">${imgSlotInner(imgSrc(valObj))}</div>
-    <div class="imgbtns">
-      <label class="btn sec sm">📷 Chụp<input type="file" accept="image/*" capture="environment" data-imgkey="${key}" hidden></label>
-      <label class="btn sec sm">🖼️ Chọn ảnh<input type="file" accept="image/*" data-imgkey="${key}" hidden></label>
-    </div></div>`;
+    <div class="imgbtns">${btns}</div>
+    ${isCccd?'<div class="hint" style="margin-top:4px">Ảnh CCCD sẽ được cắt đúng tỉ lệ thẻ (85,6 × 53,98 mm).</div>':''}</div>`;
 }
 function sigField(key,valObj){
   const pid='prev_'+key.replace(/:/g,'_');
@@ -381,14 +393,96 @@ document.addEventListener('change',async(e)=>{
   const inp=e.target;
   if(inp&&inp.matches&&inp.matches('input[type=file][data-imgkey]')){
     const f=inp.files&&inp.files[0];if(!f)return;
+    const key=inp.dataset.imgkey;
+    // Ảnh CCCD (chụp dự phòng hoặc chọn từ thư viện): mở bước cắt theo tỉ lệ thẻ
+    if(inp.dataset.crop==='cccd'){
+      try{const url=await fileToResizedDataURL(f,2000,0.9);openCropModal(url,key);}
+      catch(err){toast('Không đọc được ảnh','err');}
+      inp.value='';return;
+    }
     // Ảnh CCCD cần nét để đọc được số -> để độ phân giải cao hơn; ảnh chân dung nén nhẹ cho nhanh.
-    const isCccd=/cccdPhoto$/.test(inp.dataset.imgkey||'');
+    const isCccd=/cccdPhoto$/.test(key||'');
     const maxW=isCccd?1600:1000, q=isCccd?0.82:0.7;
-    try{const url=await fileToResizedDataURL(f,maxW,q);await storeImageForKey(inp.dataset.imgkey,url);}
+    try{const url=await fileToResizedDataURL(f,maxW,q);await storeImageForKey(key,url);}
     catch(err){toast('Không đọc được ảnh','err');}
     inp.value='';
   }
 });
+
+/* ============================================================ CHỤP CCCD (camera trong app + cắt theo tỉ lệ thẻ) ============================================================ */
+var CCCD_RATIO=85.6/53.98;  // ≈ 1.586 (ngang)
+/* Hướng A: mở camera trực tiếp với khung CCCD. Lỗi/không hỗ trợ -> tự fallback sang chụp gốc + cắt (Hướng B). */
+async function openCccdCamera(key){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return cccdFallback(key);
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});}
+  catch(err){return cccdFallback(key);}
+  openModal({title:'Chụp ảnh CCCD',
+    bodyHTML:`<div id="camWrap" style="position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden">
+        <video id="camVideo" playsinline autoplay muted style="width:100%;display:block"></video>
+        <div id="camFrame" style="position:absolute;left:5%;width:90%;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.45);border-radius:8px;pointer-events:none"></div>
+      </div>
+      <div class="hint" style="margin-top:8px;text-align:center">Đặt CCCD nằm ngang, vừa khít khung trắng rồi bấm Chụp</div>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" onclick="captureCccd('${key}')">📸 Chụp</button>`,
+    onMount:()=>{
+      const v=document.getElementById('camVideo');v.srcObject=stream;window._cccdStream=stream;
+      function layoutFrame(){const fr=document.getElementById('camFrame');if(!fr||!v.clientWidth)return;const w=v.clientWidth*0.9;const h=w/CCCD_RATIO;fr.style.height=h+'px';fr.style.top=Math.max(0,(v.clientHeight-h)/2)+'px';}
+      v.onloadedmetadata=()=>{try{v.play();}catch(e){}layoutFrame();};
+      setTimeout(layoutFrame,300);window._cccdLayout=layoutFrame;window.addEventListener('resize',layoutFrame);
+    }});
+}
+function cccdFallback(key){const inp=document.getElementById('fbcap_prev_'+key.replace(/:/g,'_'));if(inp)inp.click();else toast('Không mở được máy ảnh','err');}
+/* Chụp 1 khung video, cắt đúng vùng khung trắng (tỉ lệ CCCD) rồi lưu */
+function captureCccd(key){
+  const v=document.getElementById('camVideo');if(!v||!v.videoWidth){toast('Camera chưa sẵn sàng','err');return;}
+  const scale=v.videoWidth/v.clientWidth;            // tỉ lệ đồng nhất vì video cao auto theo intrinsic
+  const fx=v.clientWidth*0.05, fw=v.clientWidth*0.9, fh=fw/CCCD_RATIO, fy=Math.max(0,(v.clientHeight-fh)/2);
+  let sx=fx*scale, sy=fy*scale, sw=fw*scale, sh=fh*scale;
+  sx=Math.max(0,sx);sy=Math.max(0,sy);sw=Math.min(sw,v.videoWidth-sx);sh=Math.min(sh,v.videoHeight-sy);
+  const outW=Math.min(1600,Math.round(sw)),outH=Math.round(outW*sh/sw);
+  const cv=document.createElement('canvas');cv.width=outW;cv.height=outH;
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,outW,outH);cx.drawImage(v,sx,sy,sw,sh,0,0,outW,outH);
+  const url=cv.toDataURL('image/jpeg',0.85);
+  closeModal();storeImageForKey(key,url);toast('Đã chụp CCCD','ok');
+}
+/* Hướng B: hộp cắt ảnh theo tỉ lệ CCCD (kéo để di chuyển + thanh trượt phóng to) */
+function openCropModal(dataUrl,key){
+  openModal({title:'Cắt ảnh CCCD',
+    bodyHTML:`<div id="cropView" style="position:relative;width:100%;max-width:380px;margin:0 auto;background:#000;overflow:hidden;border-radius:10px;touch-action:none">
+        <img id="cropImg" src="${dataUrl}" style="position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;-webkit-user-drag:none" draggable="false">
+      </div>
+      <div style="margin-top:12px"><label style="font-size:13px">Phóng to</label>
+        <input id="cropZoom" type="range" min="1" max="4" step="0.01" value="1" style="width:100%"></div>
+      <div class="hint" style="text-align:center">Kéo ảnh để di chuyển, dùng thanh trượt để phóng to cho thẻ vừa khung</div>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" onclick="confirmCrop('${key}')">✓ Lưu ảnh</button>`,
+    onMount:(m)=>initCrop(m)});
+}
+function initCrop(m){
+  const view=m.querySelector('#cropView'),img=m.querySelector('#cropImg'),zoom=m.querySelector('#cropZoom');
+  function apply(){const S=window._crop;if(!S)return;const s=S.base*S.zoom,dispW=S.iw*s,dispH=S.ih*s;
+    S.tx=Math.min(0,Math.max(S.viewW-dispW,S.tx));S.ty=Math.min(0,Math.max(S.viewH-dispH,S.ty));
+    img.style.transform=`translate(${S.tx}px,${S.ty}px) scale(${s})`;}
+  function setup(){const viewW=view.clientWidth||320,viewH=Math.round(viewW/CCCD_RATIO);view.style.height=viewH+'px';
+    const iw=img.naturalWidth,ih=img.naturalHeight,base=Math.max(viewW/iw,viewH/ih);
+    window._crop={iw,ih,viewW,viewH,base,zoom:1,tx:0,ty:0};apply();}
+  if(img.complete&&img.naturalWidth)setup();else img.onload=setup;
+  let dragging=false,lx=0,ly=0;
+  view.addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;try{view.setPointerCapture(e.pointerId);}catch(_){}});
+  view.addEventListener('pointermove',e=>{if(!dragging)return;const S=window._crop;if(!S)return;S.tx+=e.clientX-lx;S.ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;apply();});
+  view.addEventListener('pointerup',()=>{dragging=false;});view.addEventListener('pointercancel',()=>{dragging=false;});
+  zoom.addEventListener('input',()=>{const S=window._crop;if(!S)return;const cx=S.viewW/2,cy=S.viewH/2,olds=S.base*S.zoom,nz=parseFloat(zoom.value),news=S.base*nz;
+    S.tx=cx-(cx-S.tx)*(news/olds);S.ty=cy-(cy-S.ty)*(news/olds);S.zoom=nz;apply();});
+}
+function confirmCrop(key){
+  const S=window._crop,img=document.getElementById('cropImg');if(!S||!img){closeModal();return;}
+  const s=S.base*S.zoom;let sx=-S.tx/s,sy=-S.ty/s,sw=S.viewW/s,sh=S.viewH/s;
+  sx=Math.max(0,Math.min(sx,S.iw-1));sy=Math.max(0,Math.min(sy,S.ih-1));sw=Math.min(sw,S.iw-sx);sh=Math.min(sh,S.ih-sy);
+  const outW=Math.min(1600,Math.round(sw)),outH=Math.round(outW*sh/sw);
+  const cv=document.createElement('canvas');cv.width=outW;cv.height=outH;
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,outW,outH);cx.drawImage(img,sx,sy,sw,sh,0,0,outW,outH);
+  const url=cv.toDataURL('image/jpeg',0.85);
+  closeModal();storeImageForKey(key,url);toast('Đã lưu ảnh CCCD','ok');
+}
 /* Tự chèn dấu chấm phân cách hàng nghìn cho mọi ô có thuộc tính data-money */
 document.addEventListener('input',(e)=>{
   const el=e.target;
@@ -772,7 +866,7 @@ function renderCCCD(box){
       rows+=`<tr><td>${i+1}</td><td>${esc(v.name)}</td><td>${cell}</td></tr>`;});
   });
   box.innerHTML=`<div class="muted" style="margin-bottom:10px">${esc(h.name)} · Tổng: <b>${total}</b> khách${missing?` · <b style="color:var(--danger)">${missing}</b> chưa có ảnh CCCD`:''}</div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="stat-table stat-cccd">
       <thead><tr><th>STT</th><th>Họ và tên</th><th>Ảnh CCCD</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
 }
@@ -794,7 +888,7 @@ function renderVehicles(box){
     list.forEach((v,i)=>{rows+=`<tr><td>${i+1}</td><td>${esc(v.name)}</td><td>${esc(v.bienso)}</td></tr>`;});
   });
   box.innerHTML=`<div class="muted" style="margin-bottom:10px">${esc(h.name)} · Tổng: <b>${total}</b> xe</div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="stat-table stat-xe">
       <thead><tr><th>STT</th><th>Họ và tên</th><th>Biển số xe</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
 }
@@ -1097,9 +1191,9 @@ function renderFinanceTab(c,h,kind){
     // map key -> tên rút gọn (chỉ tab Doanh thu); khoản đã nhập cũng tự rút gọn theo
     const tShort={};if(kind==='thu')financeTargets(h).forEach(t=>{tShort[t.key]=t.short;});
     rows=`<div class="tablewrap"><table class="fin-table fin-${kind}">
-      <thead><tr><th class="c-nhap"><button class="linkbtn" style="font:inherit;letter-spacing:inherit;text-transform:inherit;padding:0" onclick="openFinFilter()">Nhập ▾</button></th><th class="c-stt">STT</th><th class="c-obj">${col1}</th><th class="c-money">Số tiền</th>${noteHead}${locked?'':'<th class="c-act"></th>'}</tr></thead>
+      <thead><tr><th class="c-stt">STT</th><th class="c-obj">${col1}</th><th class="c-money">Số tiền</th>${noteHead}<th class="c-nhap"><button class="linkbtn" style="font:inherit;letter-spacing:inherit;text-transform:inherit;padding:0" onclick="openFinFilter()">Nhập ▾</button></th>${locked?'':'<th class="c-act"></th>'}</tr></thead>
       <tbody>${list.map((e,i)=>{const col=personColor(e.userId||('nm:'+(e.userName||'?')));return `<tr style="background:${col.bg}">
-        <td class="c-nhap" style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td class="c-stt">${i+1}</td><td class="c-obj">${esc((kind==='thu'&&tShort[e.targetKey])||e.label)}</td><td class="c-money">${money(e.amount)}</td>${kind==='chi'?'':`<td class="c-note">${e.note?`<button class="linkbtn" onclick="viewNote('${e.id}')">Xem</button>`:''}</td>`}
+        <td class="c-stt" style="border-left:4px solid ${col.bar}">${i+1}</td><td class="c-obj">${esc((kind==='thu'&&tShort[e.targetKey])||e.label)}</td><td class="c-money">${money(e.amount)}</td>${kind==='chi'?'':`<td class="c-note">${e.note?`<button class="linkbtn" onclick="viewNote('${e.id}')">Xem</button>`:''}</td>`}<td class="c-nhap">${esc(e.userName||'')}</td>
         ${locked?'':`<td class="c-act"><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
       </tr>`;}).join('')}</tbody></table></div>`;
   } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>${fp?`Không có khoản ${title.toLowerCase()} nào do <b>${esc(fp)}</b> nhập.`:`Chưa có khoản ${title.toLowerCase()} nào trong tháng này.`}</div>`; }
