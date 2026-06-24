@@ -182,6 +182,7 @@ tr:last-child td{border-bottom:none}
   <div class="content" id="content"></div>
 </div>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="modal-bg" id="modal2Bg" style="z-index:200"><div class="modal" id="modal2"></div></div>
 
 <div class="sig-overlay" id="sigOverlay">
   <div class="sig-bar"><span id="sigTitle">Ký tên</span>
@@ -350,6 +351,16 @@ function openModal({title,bodyHTML,footHTML,onMount}){
 }
 function closeModal(){if(window._cccdStream){try{window._cccdStream.getTracks().forEach(t=>t.stop());}catch(e){}window._cccdStream=null;}$('#modalBg').classList.remove('show');}
 $('#modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal();});
+/* Lớp modal THỨ HAI: xếp chồng lên trên form (vd form Hợp đồng) để chụp/cắt CCCD không làm mất form bên dưới */
+function openModal2({title,bodyHTML,footHTML,onMount}){
+  $('#modal2').innerHTML=`<div class="modal-head"><div class="mt">${esc(title)}</div>
+    <button class="closex" onclick="closeModal2()">✕</button></div>
+    <div class="modal-body">${bodyHTML}</div>${footHTML?`<div class="modal-foot">${footHTML}</div>`:''}`;
+  $('#modal2Bg').classList.add('show');
+  if(onMount)onMount($('#modal2'));
+}
+function closeModal2(){if(window._cccdStream){try{window._cccdStream.getTracks().forEach(t=>t.stop());}catch(e){}window._cccdStream=null;}$('#modal2Bg').classList.remove('show');}
+$('#modal2Bg').addEventListener('click',e=>{if(e.target.id==='modal2Bg')closeModal2();});
 
 /* ---------- IMAGE / SIGNATURE FIELD HELPERS ---------- */
 function imgSlotInner(src){return src?`<img src="${src}">`:`<div class="imgph">Chưa có ảnh</div>`;}
@@ -424,13 +435,13 @@ async function openCccdCamera(key){
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});}
   catch(err){return cccdFallback(key);}
-  openModal({title:'Chụp ảnh CCCD',
+  openModal2({title:'Chụp ảnh CCCD',
     bodyHTML:`<div id="camWrap" style="position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden">
         <video id="camVideo" playsinline autoplay muted style="width:100%;display:block"></video>
         <div id="camFrame" style="position:absolute;left:5%;width:90%;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.45);border-radius:8px;pointer-events:none"></div>
       </div>
       <div class="hint" style="margin-top:8px;text-align:center">Đặt CCCD nằm ngang, vừa khít khung trắng rồi bấm Chụp</div>`,
-    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" onclick="captureCccd('${key}')">📸 Chụp</button>`,
+    footHTML:`<button class="btn sec" onclick="closeModal2()">Huỷ</button><button class="btn" onclick="captureCccd('${key}')">📸 Chụp</button>`,
     onMount:()=>{
       const v=document.getElementById('camVideo');v.srcObject=stream;window._cccdStream=stream;
       function layoutFrame(){const fr=document.getElementById('camFrame');if(!fr||!v.clientWidth)return;const w=v.clientWidth*0.9;const h=w/CCCD_RATIO;fr.style.height=h+'px';fr.style.top=Math.max(0,(v.clientHeight-h)/2)+'px';}
@@ -450,18 +461,18 @@ function captureCccd(key){
   const cv=document.createElement('canvas');cv.width=outW;cv.height=outH;
   const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,outW,outH);cx.drawImage(v,sx,sy,sw,sh,0,0,outW,outH);
   const url=cv.toDataURL('image/jpeg',0.85);
-  closeModal();storeImageForKey(key,url);toast('Đã chụp CCCD','ok');
+  closeModal2();storeImageForKey(key,url);toast('Đã chụp CCCD','ok');
 }
 /* Hướng B: hộp cắt ảnh theo tỉ lệ CCCD (kéo để di chuyển + thanh trượt phóng to) */
 function openCropModal(dataUrl,key){
-  openModal({title:'Cắt ảnh CCCD',
+  openModal2({title:'Cắt ảnh CCCD',
     bodyHTML:`<div id="cropView" style="position:relative;width:100%;max-width:380px;margin:0 auto;background:#000;overflow:hidden;border-radius:10px;touch-action:none">
         <img id="cropImg" src="${dataUrl}" style="position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;-webkit-user-drag:none" draggable="false">
       </div>
       <div style="margin-top:12px"><label style="font-size:13px">Phóng to</label>
         <input id="cropZoom" type="range" min="1" max="4" step="0.01" value="1" style="width:100%"></div>
       <div class="hint" style="text-align:center">Kéo ảnh để di chuyển, dùng thanh trượt để phóng to cho thẻ vừa khung</div>`,
-    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" onclick="confirmCrop('${key}')">✓ Lưu ảnh</button>`,
+    footHTML:`<button class="btn sec" onclick="closeModal2()">Huỷ</button><button class="btn" onclick="confirmCrop('${key}')">✓ Lưu ảnh</button>`,
     onMount:(m)=>initCrop(m)});
 }
 function initCrop(m){
@@ -481,14 +492,14 @@ function initCrop(m){
     S.tx=cx-(cx-S.tx)*(news/olds);S.ty=cy-(cy-S.ty)*(news/olds);S.zoom=nz;apply();});
 }
 function confirmCrop(key){
-  const S=window._crop,img=document.getElementById('cropImg');if(!S||!img){closeModal();return;}
+  const S=window._crop,img=document.getElementById('cropImg');if(!S||!img){closeModal2();return;}
   const s=S.base*S.zoom;let sx=-S.tx/s,sy=-S.ty/s,sw=S.viewW/s,sh=S.viewH/s;
   sx=Math.max(0,Math.min(sx,S.iw-1));sy=Math.max(0,Math.min(sy,S.ih-1));sw=Math.min(sw,S.iw-sx);sh=Math.min(sh,S.ih-sy);
   const outW=Math.min(1600,Math.round(sw)),outH=Math.round(outW*sh/sw);
   const cv=document.createElement('canvas');cv.width=outW;cv.height=outH;
   const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,outW,outH);cx.drawImage(img,sx,sy,sw,sh,0,0,outW,outH);
   const url=cv.toDataURL('image/jpeg',0.85);
-  closeModal();storeImageForKey(key,url);toast('Đã lưu ảnh CCCD','ok');
+  closeModal2();storeImageForKey(key,url);toast('Đã lưu ảnh CCCD','ok');
 }
 /* Tự chèn dấu chấm phân cách hàng nghìn cho mọi ô có thuộc tính data-money */
 document.addEventListener('input',(e)=>{
