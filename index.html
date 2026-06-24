@@ -80,7 +80,9 @@ a{color:var(--primary)}
   position:sticky;top:66px;z-index:20;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;padding:9px 15px;border-radius:999px;background:#f1f3f7;color:var(--muted);font-weight:600;font-size:14px;border:none;white-space:nowrap}
+.tab.primary{background:var(--primary-light);color:var(--primary-dark)}
 .tab.active{background:var(--primary);color:#fff}
+.tab-sep{flex:0 0 auto;width:1px;align-self:center;height:22px;background:var(--border);margin:0 3px}
 
 .field{margin-bottom:13px}
 .field label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}
@@ -582,8 +584,10 @@ function renderTopbar(){const tb=$('#topbar');
 }
 function renderTabs(){const host=$('#tabsHost');
   if(APP.screen!=='house'){host.innerHTML='';return;}
-  const tabs=[['doanhthu','Doanh thu'],['chiphi','Chi phí'],['hopdong','Hợp đồng'],['quyettoan','Quyết toán'],['thietbi','Thiết bị'],['thongke','Thống kê']];
-  host.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${APP.tab===k?'active':''}" onclick="setTab('${k}')">${l}</button>`).join('')}</div>`;
+  const primary=[['doanhthu','Doanh thu'],['chiphi','Chi phí'],['hopdong','Hợp đồng']];
+  const secondary=[['quyettoan','Quyết toán'],['thietbi','Thiết bị'],['thongke','Thống kê']];
+  const btn=([k,l],isPri)=>`<button class="tab ${isPri?'primary ':''}${APP.tab===k?'active':''}" onclick="setTab('${k}')">${l}</button>`;
+  host.innerHTML=`<div class="tabs">${primary.map(t=>btn(t,true)).join('')}<span class="tab-sep"></span>${secondary.map(t=>btn(t,false)).join('')}</div>`;
 }
 
 /* ---------- ENTRY ---------- */
@@ -746,8 +750,6 @@ function renderHouse(c){const h=STORE.house(APP.houseId);if(!h){goEntry();return
   if(APP.tab==='chiphi')return renderFinanceTab(c,h,'chi');
   if(APP.tab==='quyettoan')return renderTabQuyetToan(c,h);
   if(APP.tab==='thietbi')return renderTabThietBi(c,h);
-  const labels={quyettoan:'Quyết toán'};
-  c.innerHTML=`<div class="placeholder-tab"><div class="ic">🚧</div><h2 style="margin:0 0 6px">${labels[APP.tab]}</h2><p>Trang này sẽ được hoàn thiện sau.</p></div>`;
 }
 
 /* ---------- TAB THỐNG KÊ ---------- */
@@ -914,10 +916,9 @@ function renderVehicles(box){
 
 /* ---------- TAB HỢP ĐỒNG ---------- */
 function renderTabHopDong(c,h){
-  c.innerHTML=`<div class="subbar">
-      <button class="btn" onclick="renderContractTable($('#hdBody'),STORE.house(APP.houseId))">📋 Kiểm tra hợp đồng</button>
-      <button class="btn ghost" onclick="chooseContractType()">＋ Thêm hợp đồng</button>
-    </div><div id="hdBody"></div>`;
+  c.innerHTML=`
+    <button class="btn lg block" style="margin-bottom:12px" onclick="chooseContractType()">＋ Thêm hợp đồng</button>
+    <div id="hdBody"></div>`;
   renderContractTable($('#hdBody',c),h);
 }
 function chooseContractType(){openModal({title:'Thêm hợp đồng',
