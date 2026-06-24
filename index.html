@@ -324,7 +324,7 @@ function fileToResizedDataURL(file,maxW,q){
 }
 
 /* ---------- app state ---------- */
-const APP={screen:'entry',houseId:null,tab:'doanhthu',hdView:'list',tkView:'xe'};
+const APP={screen:'entry',houseId:null,tab:'doanhthu',hdView:'list',tkView:'xe',finFilter:''};
 
 /* ---------- MODAL ---------- */
 function openModal({title,bodyHTML,footHTML,onMount}){
@@ -862,7 +862,12 @@ function showPersonInfo(ctId){
       <button class="btn" onclick="contractForm('${ct.type}','${ct.id}')">✏️ Sửa</button>`});
 }
 function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v||'—')}</span></div>`;}
-function deleteContract(ctId){const h=STORE.house(APP.houseId);const ct=h.contracts.find(x=>x.id===ctId);if(ct)dropImages(contractCustomerImgs(ct));h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
+function deleteContract(ctId){const h=STORE.house(APP.houseId);const ct=(h.contracts||[]).find(x=>x.id===ctId);
+  const nm=ct?(ct.type==='KTX'?((ct.customer&&ct.customer.name)||''):'phòng trọ'):'';
+  openModal({title:'Xoá hợp đồng',
+    bodyHTML:`<p style="margin:0">Bạn có chắc chắn xoá hợp đồng${nm?' của <b>'+esc(nm)+'</b>':''} không?<br><span class="muted" style="font-size:13px">Thao tác này không thể hoàn tác.</span></p>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">↩︎ Hoàn tác</button><button class="btn danger" onclick="doDeleteContract('${ctId}')">🗑️ Chắc chắn xoá</button>`});}
+function doDeleteContract(ctId){const h=STORE.house(APP.houseId);const ct=h.contracts.find(x=>x.id===ctId);if(ct)dropImages(contractCustomerImgs(ct));h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
 
 /* ---------- CONTRACT FORM ---------- */
 function contractForm(type,id){
@@ -1068,7 +1073,10 @@ function renderFinanceTab(c,h,kind){
   if(!am){c.innerHTML=`<div class="placeholder-tab"><div class="ic">📅</div><h2 style="margin:0 0 6px">${title}</h2><p>Chưa chọn tháng đang nhập.<br>Vào <b>Quản trị dòng tiền</b> để chọn tháng.</p>
     <button class="btn ghost" style="margin-top:10px" onclick="goCashAdmin()">Mở Quản trị dòng tiền</button></div>`;return;}
   const locked=(h.lockedMonths||[]).includes(am);
-  const list=(h.finance||[]).filter(e=>e.month===am&&e.kind===kind);
+  const allList=(h.finance||[]).filter(e=>e.month===am&&e.kind===kind);
+  // Lọc theo người nhập (cột "Nhập"): rỗng = hiển thị tất cả
+  const fp=APP.finFilter||'';
+  const list=fp?allList.filter(e=>(e.userName||'')===fp):allList;
   const total=list.reduce((s,e)=>s+(Number(e.amount)||0),0);
   // Việc 1: tóm tắt "chưa đóng" (chỉ ở tab Doanh thu)
   let chuaDong='';
@@ -1089,16 +1097,17 @@ function renderFinanceTab(c,h,kind){
     // map key -> tên rút gọn (chỉ tab Doanh thu); khoản đã nhập cũng tự rút gọn theo
     const tShort={};if(kind==='thu')financeTargets(h).forEach(t=>{tShort[t.key]=t.short;});
     rows=`<div class="tablewrap"><table class="fin-table fin-${kind}">
-      <thead><tr><th class="c-nhap">Nhập</th><th class="c-stt">STT</th><th class="c-obj">${col1}</th><th class="c-money">Số tiền</th>${noteHead}${locked?'':'<th class="c-act"></th>'}</tr></thead>
+      <thead><tr><th class="c-nhap"><button class="linkbtn" style="font:inherit;letter-spacing:inherit;text-transform:inherit;padding:0" onclick="openFinFilter()">Nhập ▾</button></th><th class="c-stt">STT</th><th class="c-obj">${col1}</th><th class="c-money">Số tiền</th>${noteHead}${locked?'':'<th class="c-act"></th>'}</tr></thead>
       <tbody>${list.map((e,i)=>{const col=personColor(e.userId||('nm:'+(e.userName||'?')));return `<tr style="background:${col.bg}">
-        <td class="c-nhap" style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td class="c-stt">${i+1}</td><td class="c-obj">${esc((kind==='thu'&&tShort[e.targetKey])||e.label)}</td><td class="c-money">${money(e.amount)}</td>${kind==='chi'?'':`<td class="c-note">${esc(e.note||'')}</td>`}
+        <td class="c-nhap" style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td class="c-stt">${i+1}</td><td class="c-obj">${esc((kind==='thu'&&tShort[e.targetKey])||e.label)}</td><td class="c-money">${money(e.amount)}</td>${kind==='chi'?'':`<td class="c-note">${e.note?`<button class="linkbtn" onclick="viewNote('${e.id}')">Xem</button>`:''}</td>`}
         ${locked?'':`<td class="c-act"><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
       </tr>`;}).join('')}</tbody></table></div>`;
-  } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>Chưa có khoản ${title.toLowerCase()} nào trong tháng này.</div>`; }
+  } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>${fp?`Không có khoản ${title.toLowerCase()} nào do <b>${esc(fp)}</b> nhập.`:`Chưa có khoản ${title.toLowerCase()} nào trong tháng này.`}</div>`; }
   c.innerHTML=`
     <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div><div style="font-weight:700">${title} · tháng ${esc(isoToMy(am))}</div>
-        <div class="muted" style="font-size:13px">Tổng: <b>${money(total)}</b> · ${list.length} khoản</div></div>
+        <div class="muted" style="font-size:13px">Tổng: <b>${money(total)}</b> · ${list.length} khoản</div>
+        ${fp?`<div style="margin-top:6px"><span class="badge ok">Lọc: ${esc(fp)}</span> <button class="linkbtn" onclick="clearFinFilter()">✕ Bỏ lọc</button></div>`:''}</div>
       <div>${locked?`<span class="badge danger">Đã khoá</span> <button class="btn ok sm" onclick="unlockMonthThenRender('${h.id}')">🔓 Mở khoá</button>`
                     :`<button class="btn sm" onclick="lockMonth('${h.id}')">🔒 Khoá tháng</button>`}</div>
     </div>
@@ -1107,6 +1116,19 @@ function renderFinanceTab(c,h,kind){
     ${rows}`;
 }
 function unlockMonthThenRender(id){unlockMonth(id);}
+/* ----- Lọc theo người nhập (cột "Nhập") ----- */
+function openFinFilter(){
+  const h=STORE.house(APP.houseId);const am=STORE.activeMonth();const kind=APP.tab==='chiphi'?'chi':'thu';
+  const people=[...new Set((h.finance||[]).filter(e=>e.month===am&&e.kind===kind).map(e=>e.userName||'').filter(Boolean))];
+  window._finPeople=people;const cur=APP.finFilter||'';
+  const opt=(label,val,active)=>`<button class="btn ${active?'':'sec'} block" style="margin-bottom:8px;text-align:left" onclick="${val}">${active?'✓ ':''}${esc(label)}</button>`;
+  const body=opt('Tất cả người nhập','setFinFilter(-1)',cur==='')
+    +people.map((p,i)=>opt(p,'setFinFilter('+i+')',cur===p)).join('');
+  openModal({title:'Lọc theo người nhập',bodyHTML:people.length?body:'<p class="muted" style="margin:0">Chưa có khoản nào để lọc.</p>',
+    footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});
+}
+function setFinFilter(idx){APP.finFilter=idx<0?'':((window._finPeople||[])[idx]||'');closeModal();render();}
+function clearFinFilter(){APP.finFilter='';render();}
 function financeForm(kind,id){
   const h=STORE.house(APP.houseId);const am=STORE.activeMonth();
   if(!getCurUser()){toast('Hãy chọn "Bạn là" trong Quản trị dòng tiền','err');return;}
@@ -1248,7 +1270,21 @@ function saveFinance(kind,id,editing){
   if(editing){const idx=h.finance.findIndex(x=>x.id===id);h.finance[idx]=entry;}else h.finance.push(entry);
   STORE.save();enqueueOp({entity:'finance',type:'upsert',houseId:h.id,entry:JSON.parse(JSON.stringify(entry))});closeModal();toast('Đã lưu','ok');render();
 }
-function deleteFinance(id){const h=STORE.house(APP.houseId);h.finance=(h.finance||[]).filter(x=>x.id!==id);STORE.save();enqueueOp({entity:'finance',type:'delete',houseId:h.id,id});toast('Đã xoá','ok');render();}
+function deleteFinance(id){const h=STORE.house(APP.houseId);const e=(h.finance||[]).find(x=>x.id===id);
+  const nm=e?(e.label||''):'';const amt=e?money(e.amount):'';
+  openModal({title:'Xoá khoản',
+    bodyHTML:`<p style="margin:0">Bạn có chắc chắn xoá khoản${nm?' <b>'+esc(nm)+'</b>':''}${amt?' ('+amt+')':''} không?<br><span class="muted" style="font-size:13px">Thao tác này không thể hoàn tác.</span></p>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">↩︎ Hoàn tác</button><button class="btn danger" onclick="doDeleteFinance('${id}')">🗑️ Chắc chắn xoá</button>`});}
+function doDeleteFinance(id){const h=STORE.house(APP.houseId);h.finance=(h.finance||[]).filter(x=>x.id!==id);STORE.save();enqueueOp({entity:'finance',type:'delete',houseId:h.id,id});closeModal();toast('Đã xoá','ok');render();}
+/* Xem ghi chú đầy đủ của một khoản doanh thu (nút "Xem" ở cột Ghi chú) */
+function viewNote(id){const h=STORE.house(APP.houseId);const e=(h.finance||[]).find(x=>x.id===id);if(!e)return;
+  openModal({title:'Ghi chú',
+    bodyHTML:`<div class="card" style="margin:0">
+        <div class="kv"><span class="k">Đối tượng</span><span class="v">${esc(e.label||'')}</span></div>
+        <div class="kv"><span class="k">Số tiền</span><span class="v">${money(e.amount)}</span></div>
+      </div>
+      <div style="margin-top:12px;white-space:pre-wrap;line-height:1.6">${esc(e.note||'')}</div>`,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>`});}
 
 /* ============================================================ TAB QUYẾT TOÁN ============================================================ */
 function qtAvailableMonths(h){
@@ -1571,8 +1607,8 @@ function importData(input){const f=input.files[0];if(!f)return;const r=new FileR
 /* ---------- navigation ---------- */
 function goEntry(){APP.screen='entry';APP.houseId=null;scrollTop();render();}
 function goSystem(){APP.screen='system';scrollTop();render();}
-function enterHouse(id){APP.screen='house';APP.houseId=id;APP.tab='doanhthu';APP.hdView='list';scrollTop();render();}
-function setTab(t){APP.tab=t;scrollTop();render();}
+function enterHouse(id){APP.screen='house';APP.houseId=id;APP.tab='doanhthu';APP.hdView='list';APP.finFilter='';scrollTop();render();}
+function setTab(t){APP.tab=t;APP.finFilter='';scrollTop();render();}
 function scrollTop(){window.scrollTo(0,0);}
 
 render();
