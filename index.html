@@ -110,6 +110,17 @@ table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
 th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border)}
 th{background:#f8fafc;font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);position:sticky;top:0}
 tr:last-child td{border-bottom:none}
+/* ===== Bảng Doanh thu/Chi phí: tối ưu cột trên điện thoại (không ảnh hưởng máy tính) ===== */
+@media (max-width:640px){
+  .fin-table{min-width:0;width:100%;table-layout:fixed}
+  .fin-table th,.fin-table td{padding:8px 6px;word-break:break-word;vertical-align:top}
+  .fin-table .c-nhap{width:42px;padding-right:2px}
+  .fin-table .c-stt{width:26px;padding-left:2px;padding-right:4px;text-align:center}
+  .fin-table .c-money{width:96px;white-space:nowrap;padding-left:6px}
+  .fin-thu .c-note{width:44px}
+  .fin-table .c-act{width:54px}
+  /* cột Đối tượng / Nội dung (.c-obj) tự nhận phần rộng còn lại */
+}
 .roomhead td{background:var(--primary-light);font-weight:700;color:var(--primary-dark)}
 .linkbtn{background:none;border:none;color:var(--primary);font-weight:600;text-decoration:underline;padding:0}
 
@@ -1033,10 +1044,21 @@ function unlockMonth(id){const h=STORE.house(id);requirePassword(h,'Mở khoá t
 function enqueueHouseUpsert(id){const _hm=JSON.parse(JSON.stringify(STORE.house(id)));delete _hm.contracts;enqueueOp({entity:'house',type:'upsert',house:_hm});}
 
 /* ----- Danh sách đối tượng để chọn (KTX: khách; phòng trọ: phòng) ----- */
-function financeTargets(h){const out=[];
+/* Lấy 2 chữ cuối của họ tên (vd "Trần Kiến Vĩ" -> "Kiến Vĩ"); tên ≤2 chữ thì giữ nguyên */
+function lastTwoWords(name){const p=String(name||'').trim().split(/\s+/).filter(Boolean);return p.length<=2?p.join(' '):p.slice(-2).join(' ');}
+/* Map tên đầy đủ -> tên hiển thị (rút gọn 2 chữ cuối), TRỪ khi 2 chữ cuối trùng nhau trong cùng nhà thì giữ đầy đủ */
+function shortNameMap(h){
+  const names=[];
+  (h.contracts||[]).forEach(ct=>{if(ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim())names.push(ct.customer.name.trim());});
+  const cnt={};names.forEach(n=>{const s=lastTwoWords(n);cnt[s]=(cnt[s]||0)+1;});
+  const map={};names.forEach(n=>{const s=lastTwoWords(n);map[n]=cnt[s]>1?n:s;});
+  return map;
+}
+function financeTargets(h){const out=[];const sm=shortNameMap(h);
   (h.contracts||[]).forEach(ct=>{if(ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim()){
-    const room=(h.rooms||[]).find(r=>r.id===ct.roomId);out.push({type:'KTX',key:'ktx:'+ct.id,label:(room?'['+room.name+'] ':'')+ct.customer.name});}});
-  (h.rooms||[]).filter(r=>r.type==='TRO').forEach(r=>{out.push({type:'TRO',key:'tro:'+r.id,label:'Phòng '+r.name+' (trọ)'});});
+    const room=(h.rooms||[]).find(r=>r.id===ct.roomId);const pre=room?'['+room.name+'] ':'';const full=ct.customer.name.trim();
+    out.push({type:'KTX',key:'ktx:'+ct.id,label:pre+full,short:pre+(sm[full]||full)});}});
+  (h.rooms||[]).filter(r=>r.type==='TRO').forEach(r=>{const lbl='Phòng '+r.name+' (trọ)';out.push({type:'TRO',key:'tro:'+r.id,label:lbl,short:lbl});});
   return out;
 }
 
@@ -1057,18 +1079,20 @@ function renderFinanceTab(c,h,kind){
     if(targets.length){
       chuaDong=`<div class="card" style="margin-bottom:12px">
         <div style="font-weight:700;margin-bottom:4px">Chưa đóng: ${remain.length}/${targets.length}</div>
-        <div class="muted" style="font-size:13px">${remain.length?remain.map(t=>esc(t.label)).join(' · '):'Đã thu đủ tất cả đối tượng trong tháng. ✓'}</div></div>`;
+        <div class="muted" style="font-size:13px">${remain.length?remain.map(t=>esc(t.short)).join(' · '):'Đã thu đủ tất cả đối tượng trong tháng. ✓'}</div></div>`;
     }
   }
   let rows='';
   if(list.length){
     const col1=kind==='chi'?'Nội dung':'Đối tượng';
-    const noteHead=kind==='chi'?'':'<th>Ghi chú</th>';
-    rows=`<div class="tablewrap"><table>
-      <thead><tr><th>Nhập</th><th>STT</th><th>${col1}</th><th>Số tiền</th>${noteHead}${locked?'':'<th></th>'}</tr></thead>
+    const noteHead=kind==='chi'?'':'<th class="c-note">Ghi chú</th>';
+    // map key -> tên rút gọn (chỉ tab Doanh thu); khoản đã nhập cũng tự rút gọn theo
+    const tShort={};if(kind==='thu')financeTargets(h).forEach(t=>{tShort[t.key]=t.short;});
+    rows=`<div class="tablewrap"><table class="fin-table fin-${kind}">
+      <thead><tr><th class="c-nhap">Nhập</th><th class="c-stt">STT</th><th class="c-obj">${col1}</th><th class="c-money">Số tiền</th>${noteHead}${locked?'':'<th class="c-act"></th>'}</tr></thead>
       <tbody>${list.map((e,i)=>{const col=personColor(e.userId||('nm:'+(e.userName||'?')));return `<tr style="background:${col.bg}">
-        <td style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td>${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}
-        ${locked?'':`<td><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
+        <td class="c-nhap" style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td class="c-stt">${i+1}</td><td class="c-obj">${esc((kind==='thu'&&tShort[e.targetKey])||e.label)}</td><td class="c-money">${money(e.amount)}</td>${kind==='chi'?'':`<td class="c-note">${esc(e.note||'')}</td>`}
+        ${locked?'':`<td class="c-act"><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
       </tr>`;}).join('')}</tbody></table></div>`;
   } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>Chưa có khoản ${title.toLowerCase()} nào trong tháng này.</div>`; }
   c.innerHTML=`
@@ -1107,7 +1131,7 @@ function financeForm(kind,id){
       <div class="field"><label>Đối tượng <span class="req">*</span></label>
         <select id="fTarget" onchange="onFinTargetChange()">
           <option value="">— Chọn khách (KTX) hoặc phòng (trọ) —</option>
-          ${avail.map(t=>`<option value="${t.key}" ${e.targetKey===t.key?'selected':''}>${esc(t.label)}</option>`).join('')}
+          ${avail.map(t=>`<option value="${t.key}" ${e.targetKey===t.key?'selected':''}>${esc(t.short)}</option>`).join('')}
           <option value="__other__" ${isCustom?'selected':''}>✏️ Khác — tự nhập…</option>
         </select>
         ${targets.length?(avail.length?'':'<div class="hint" style="color:#16a34a">Tất cả đối tượng đã đóng trong tháng này. ✓</div>'):'<div class="hint" style="color:var(--muted)">Nhà chưa có khách KTX hay phòng trọ — có thể chọn "Khác" để tự nhập.</div>'}</div>
