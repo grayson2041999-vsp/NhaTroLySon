@@ -313,7 +313,7 @@ function fileToResizedDataURL(file,maxW,q){
 }
 
 /* ---------- app state ---------- */
-const APP={screen:'entry',houseId:null,tab:'hopdong',hdView:'list',tkView:'xe'};
+const APP={screen:'entry',houseId:null,tab:'doanhthu',hdView:'list',tkView:'xe'};
 
 /* ---------- MODAL ---------- */
 function openModal({title,bodyHTML,footHTML,onMount}){
@@ -459,7 +459,7 @@ function renderTopbar(){const tb=$('#topbar');
 }
 function renderTabs(){const host=$('#tabsHost');
   if(APP.screen!=='house'){host.innerHTML='';return;}
-  const tabs=[['hopdong','Hợp đồng'],['doanhthu','Doanh thu'],['chiphi','Chi phí'],['quyettoan','Quyết toán'],['thongke','Thống kê']];
+  const tabs=[['doanhthu','Doanh thu'],['chiphi','Chi phí'],['hopdong','Hợp đồng'],['quyettoan','Quyết toán'],['thongke','Thống kê']];
   host.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${APP.tab===k?'active':''}" onclick="setTab('${k}')">${l}</button>`).join('')}</div>`;
 }
 
@@ -1091,13 +1091,17 @@ function financeForm(kind,id){
     // Việc 1: ẩn khỏi drop-list những đối tượng đã có khoản thu trong tháng (trừ chính khoản đang sửa)
     const usedKeys=new Set((h.finance||[]).filter(x=>x.kind==='thu'&&x.month===am&&x.id!==e.id).map(x=>x.targetKey));
     const avail=targets.filter(t=>!usedKeys.has(t.key));
+    // Cho phép tự nhập đối tượng/khoản thu khác (ngoài danh sách khách/phòng)
+    const isCustom=!!(e.targetKey&&e.targetKey.indexOf('other:')===0);
     body=`
       <div class="field"><label>Đối tượng <span class="req">*</span></label>
         <select id="fTarget" onchange="onFinTargetChange()">
           <option value="">— Chọn khách (KTX) hoặc phòng (trọ) —</option>
           ${avail.map(t=>`<option value="${t.key}" ${e.targetKey===t.key?'selected':''}>${esc(t.label)}</option>`).join('')}
+          <option value="__other__" ${isCustom?'selected':''}>✏️ Khác — tự nhập…</option>
         </select>
-        ${targets.length?(avail.length?'':'<div class="hint" style="color:#16a34a">Tất cả đối tượng đã đóng trong tháng này. ✓</div>'):'<div class="hint" style="color:var(--danger)">Nhà chưa có khách KTX hay phòng trọ nào.</div>'}</div>
+        ${targets.length?(avail.length?'':'<div class="hint" style="color:#16a34a">Tất cả đối tượng đã đóng trong tháng này. ✓</div>'):'<div class="hint" style="color:var(--muted)">Nhà chưa có khách KTX hay phòng trọ — có thể chọn "Khác" để tự nhập.</div>'}</div>
+      <div id="fCustomZone"></div>
       <div id="fAmountZone"></div>
       <div class="field"><label>Ghi chú</label>
         <textarea id="fNote" rows="2" style="resize:vertical">${esc(e.note||'')}</textarea></div>
@@ -1106,17 +1110,30 @@ function financeForm(kind,id){
   openModal({title:(editing?'Sửa ':'Thêm ')+title,bodyHTML:body,
     footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn" id="fSave">${editing?'Lưu':'Thêm'}</button>`,
     onMount:(m)=>{$('#fSave',m).onclick=()=>saveFinance(kind,e.id,editing);
-      if(kind==='thu'){window._finEdit=e;window._finBreakdown=null;renderAmountZone();}}
+      if(kind==='thu'){window._finEdit=e;window._finBreakdown=null;renderCustomZone();renderAmountZone();}}
   });
 }
 /* ----- Việc 2: vùng nhập số tiền thay đổi theo đối tượng (KTX / phòng trọ) ----- */
-function onFinTargetChange(){const e=window._finEdit;if(e){e.amount='';e.breakdown=null;}window._finBreakdown=null;renderAmountZone();}
+function onFinTargetChange(){const e=window._finEdit;if(e){e.amount='';e.breakdown=null;}window._finBreakdown=null;renderCustomZone();renderAmountZone();}
+/* ----- Vùng tự nhập tên đối tượng/khoản thu khác ----- */
+function renderCustomZone(){
+  const zone=$('#fCustomZone');if(!zone)return;
+  const e=window._finEdit||{};
+  const key=($('#fTarget')&&$('#fTarget').value)||'';
+  if(key==='__other__'){
+    const cur=(e.targetKey&&e.targetKey.indexOf('other:')===0)?(e.label||''):'';
+    zone.innerHTML=`<div class="field"><label>Tên khoản thu / đối tượng khác <span class="req">*</span></label>
+      <input id="fOtherLabel" value="${esc(cur)}" placeholder="VD: Tiền giữ xe vãng lai, tiền phạt, thu khác…"></div>`;
+  } else zone.innerHTML='';
+}
 function renderAmountZone(){
   const zone=$('#fAmountZone');if(!zone)return;
   const h=STORE.house(APP.houseId);const e=window._finEdit||{};
   const key=($('#fTarget')&&$('#fTarget').value)||'';
   if(!key){zone.innerHTML=`<div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
       <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}" placeholder="Chọn đối tượng ở trên"></div>`;return;}
+  if(key==='__other__'){zone.innerHTML=`<div class="field"><label>Số tiền (₫) <span class="req">*</span></label>
+      <input id="fAmount" data-money inputmode="numeric" value="${esc(maskThousand(e.amount))}" placeholder="VD: 200.000"></div>`;return;}
   if(key.indexOf('ktx:')===0){
     const ct=(h.contracts||[]).find(c=>'ktx:'+c.id===key);
     const price=ct?Number(ct.pricePerBed)||0:0;
@@ -1180,12 +1197,18 @@ function saveFinance(kind,id,editing){
     entry={id,kind,month:am,targetType:'',targetKey:'',label:content,amount:amount,note:'',userId:getCurUser(),userName:curUserName(),ts:Date.now()};
   }else{
     const key=$('#fTarget').value;if(!key){toast('Chọn đối tượng','err');return;}
-    const t=financeTargets(h).find(x=>x.key===key)||{};
-    const bd=window._finBreakdown||(window._finEdit&&window._finEdit.breakdown)||null;
-    let note=$('#fNote').value.trim();
-    if(!note&&bd)note=troNoteText(bd);
-    entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:note,userId:getCurUser(),userName:curUserName(),ts:Date.now()};
-    if(bd)entry.breakdown=bd;
+    if(key==='__other__'){
+      const otherLabel=($('#fOtherLabel')&&$('#fOtherLabel').value.trim())||'';
+      if(!otherLabel){toast('Nhập tên khoản thu khác','err');return;}
+      entry={id,kind,month:am,targetType:'KHAC',targetKey:'other:'+id,label:otherLabel,amount:amount,note:$('#fNote').value.trim(),userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+    }else{
+      const t=financeTargets(h).find(x=>x.key===key)||{};
+      const bd=window._finBreakdown||(window._finEdit&&window._finEdit.breakdown)||null;
+      let note=$('#fNote').value.trim();
+      if(!note&&bd)note=troNoteText(bd);
+      entry={id,kind,month:am,targetType:t.type||'',targetKey:key,label:t.label||'',amount:amount,note:note,userId:getCurUser(),userName:curUserName(),ts:Date.now()};
+      if(bd)entry.breakdown=bd;
+    }
   }
   h.finance=h.finance||[];
   if(editing){const idx=h.finance.findIndex(x=>x.id===id);h.finance[idx]=entry;}else h.finance.push(entry);
@@ -1514,7 +1537,7 @@ function importData(input){const f=input.files[0];if(!f)return;const r=new FileR
 /* ---------- navigation ---------- */
 function goEntry(){APP.screen='entry';APP.houseId=null;scrollTop();render();}
 function goSystem(){APP.screen='system';scrollTop();render();}
-function enterHouse(id){APP.screen='house';APP.houseId=id;APP.tab='hopdong';APP.hdView='list';scrollTop();render();}
+function enterHouse(id){APP.screen='house';APP.houseId=id;APP.tab='doanhthu';APP.hdView='list';scrollTop();render();}
 function setTab(t){APP.tab=t;scrollTop();render();}
 function scrollTop(){window.scrollTo(0,0);}
 
