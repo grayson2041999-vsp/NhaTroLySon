@@ -1001,12 +1001,22 @@ function renderCashAdmin(c){
                     :'<span class="badge ok">Đang mở</span> <button class="btn sec sm" onclick="lockMonth(\''+h.id+'\')">🔒 Khoá</button>'}
           </span></div>`;}).join(''))}
     </div>`;
+  _loadUsersDraft();   // luôn nạp bản nháp từ dữ liệu đã lưu để sửa tên hoạt động ngay khi mở trang
   renderUserList();
 }
 function renderUserList(){const box=$('#userList');if(!box)return;const users=STORE.users()||[];
+  if(!window.__users)_loadUsersDraft();
   box.innerHTML=users.length?users.map((u,i)=>`<div class="chiprow">
-    <input style="flex:1" value="${esc(u.name)}" placeholder="Tên người nhập" oninput="window.__users[${i}].name=this.value">
+    <input style="flex:1" value="${esc(u.name)}" placeholder="Tên người nhập" oninput="if(window.__users[${i}])window.__users[${i}].name=this.value" onchange="commitUsers()">
     <button class="delx" type="button" onclick="removeUser(${i})">🗑️</button></div>`).join(''):`<div class="muted" style="font-size:12px;padding:4px">Chưa có ai</div>`;
+}
+/* Lưu danh sách người nhập (sau khi sửa tên) vào máy + đồng bộ lên Sheet/Drive. KHÔNG render lại để không mất con trỏ. */
+function commitUsers(){
+  if(!window.__users)_loadUsersDraft();
+  syncUsersDom();
+  STORE.setUsers(window.__users.map(u=>({id:u.id,name:(u.name||'').trim()})).filter(u=>u.name));
+  pushSettings();
+  toast('Đã lưu người nhập','ok');
 }
 function _loadUsersDraft(){window.__users=(STORE.users()||[]).map(u=>({...u}));}
 function addUser(){_loadUsersDraft();syncUsersDom();window.__users.push({id:uid(),name:''});STORE.setUsers(window.__users);pushSettings();render();}
@@ -1055,9 +1065,9 @@ function renderFinanceTab(c,h,kind){
     const col1=kind==='chi'?'Nội dung':'Đối tượng';
     const noteHead=kind==='chi'?'':'<th>Ghi chú</th>';
     rows=`<div class="tablewrap"><table>
-      <thead><tr><th>STT</th><th>${col1}</th><th>Số tiền</th>${noteHead}<th>Người</th>${locked?'':'<th></th>'}</tr></thead>
+      <thead><tr><th>Nhập</th><th>STT</th><th>${col1}</th><th>Số tiền</th>${noteHead}${locked?'':'<th></th>'}</tr></thead>
       <tbody>${list.map((e,i)=>{const col=personColor(e.userId||('nm:'+(e.userName||'?')));return `<tr style="background:${col.bg}">
-        <td style="border-left:4px solid ${col.bar}">${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}<td>${esc(e.userName||'')}</td>
+        <td style="border-left:4px solid ${col.bar}">${esc(e.userName||'')}</td><td>${i+1}</td><td>${esc(e.label)}</td><td>${money(e.amount)}</td>${kind==='chi'?'':`<td>${esc(e.note||'')}</td>`}
         ${locked?'':`<td><button class="linkbtn" onclick="financeForm('${kind}','${e.id}')">Sửa</button> · <button class="linkbtn" style="color:var(--danger)" onclick="deleteFinance('${e.id}')">Xoá</button></td>`}
       </tr>`;}).join('')}</tbody></table></div>`;
   } else { rows=`<div class="empty"><div class="ic">${kind==='thu'?'💵':'🧾'}</div>Chưa có khoản ${title.toLowerCase()} nào trong tháng này.</div>`; }
