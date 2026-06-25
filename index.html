@@ -759,15 +759,34 @@ function renderTabThongKe(c){
       <button class="btn sm ${APP.tkView==='dongtien'?'':'sec'}" onclick="setTkView('dongtien')">💵 Dòng tiền</button>
       <button class="btn sm ${APP.tkView==='xe'?'':'sec'}" onclick="setTkView('xe')">🚗 Quản lý xe</button>
       <button class="btn sm ${APP.tkView==='cccd'?'':'sec'}" onclick="setTkView('cccd')">🪪 CCCD</button>
+      <button class="btn sm ${APP.tkView==='ketthuc'?'':'sec'}" onclick="setTkView('ketthuc')">🔚 Đã kết thúc</button>
     </div><div id="tkBody"></div>`;
   const box=$('#tkBody',c);
   if(APP.tkView==='dongtien'){
     renderCashFlow(box);
   }else if(APP.tkView==='cccd'){
     renderCCCD(box);
+  }else if(APP.tkView==='ketthuc'){
+    renderEndedContracts(box);
   }else{
     renderVehicles(box);
   }
+}
+/* Thống kê hợp đồng đã kết thúc (lưu tối đa 6 tháng kể từ ngày kết thúc) */
+function renderEndedContracts(box){
+  const h=STORE.house(APP.houseId);if(!h){box.innerHTML='';return;}
+  const ended=(h.contracts||[]).filter(c=>isEnded(c)).slice().sort((a,b)=>String(b.endedAt||'').localeCompare(String(a.endedAt||'')));
+  if(!ended.length){box.innerHTML=`<div class="empty"><div class="ic">🔚</div>Chưa có hợp đồng nào kết thúc.</div>`;return;}
+  const rows=ended.map(ct=>{const room=(h.rooms||[]).find(r=>r.id===ct.roomId);const rn=room?room.name:'—';
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div style="font-weight:700;min-width:0">${esc(ctMainName(ct)||'—')}</div>
+        <span class="badge ${ct.type==='KTX'?'ktx':'tro'}" style="white-space:nowrap">${ct.type==='KTX'?'KTX':'Trọ'} · Phòng ${esc(rn)}</span>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:4px">Kết thúc: <b>${esc(fmtDateVi(ct.endedAt))}</b>${ct.endedBy?' · '+esc(ct.endedBy):''}</div>
+      <div style="font-size:14px;margin-top:4px;white-space:pre-wrap">Lý do: ${esc(ct.endReason||'—')}</div>
+    </div>`;}).join('');
+  box.innerHTML=`<div class="muted" style="margin-bottom:10px">${esc(h.name)} · <b>${ended.length}</b> hợp đồng đã kết thúc <span style="font-size:12px">(tự xoá sau ${ENDED_KEEP_MONTHS} tháng)</span></div>${rows}`;
 }
 /* ---------- Dòng tiền (theo nhà): bảng thu/chi theo tháng + biểu đồ lợi nhuận ---------- */
 function getCashflow(h){h.cashflow=h.cashflow||[];return h.cashflow;}
@@ -873,6 +892,7 @@ function renderCCCD(box){
   const h=STORE.house(APP.houseId);if(!h){box.innerHTML='';return;}
   const byRoom={};let total=0,missing=0;
   (h.contracts||[]).forEach(ct=>{
+    if(isEnded(ct))return;
     const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
     const custs=ct.type==='KTX'?(ct.customer?[ct.customer]:[]):(ct.customers||[]);
     custs.forEach(cu=>{const has=imgHas(cu.cccdPhoto);(byRoom[roomName]=byRoom[roomName]||[]).push({name:cu.name||'—',src:has?imgSrc(cu.cccdPhoto):''});total++;if(!has)missing++;});
@@ -896,6 +916,7 @@ function renderVehicles(box){
   const h=STORE.house(APP.houseId);if(!h){box.innerHTML='';return;}
   const byRoom={};let total=0;
   (h.contracts||[]).forEach(ct=>{
+    if(isEnded(ct))return;
     const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
     const custs=ct.type==='KTX'?(ct.customer?[ct.customer]:[]):(ct.customers||[]);
     custs.forEach(cu=>{const bs=(cu.bienso||'').trim();if(bs){(byRoom[roomName]=byRoom[roomName]||[]).push({name:cu.name||'—',bienso:bs});total++;}});
@@ -927,7 +948,7 @@ function chooseContractType(){openModal({title:'Thêm hợp đồng',
     <button class="btn lg block" style="background:var(--tro)" onclick="contractForm('TRO')">🏠 Hợp đồng phòng trọ</button>`});}
 
 function renderContractTable(box,h){
-  const contracts=h.contracts||[];let people=[];
+  const contracts=(h.contracts||[]).filter(c=>!isEnded(c));let people=[];
   contracts.forEach(ct=>{const room=h.rooms.find(r=>r.id===ct.roomId);const roomName=room?room.name:'(phòng đã xoá)';
     if(ct.type==='KTX')people.push({roomName,name:ct.customer.name,cccd:ct.customer.cccd,phone:ct.customer.phone,ctId:ct.id});
     else (ct.customers||[]).forEach(p=>people.push({roomName,name:p.name,cccd:p.cccd,phone:p.phone,ctId:ct.id}));});
@@ -972,6 +993,7 @@ function showPersonInfo(ctId){
   }
   openModal({title:'Thông tin chi tiết',bodyHTML:html,
     footHTML:`<button class="btn sec" onclick="closeModal()">Đóng</button>
+      ${isEnded(ct)?'':`<button class="btn" style="background:#d97706" onclick="endContractForm('${ct.id}')">🔚 Kết thúc</button>`}
       <button class="btn danger" onclick="deleteContract('${ct.id}')">🗑️ Xoá</button>
       <button class="btn" onclick="contractForm('${ct.type}','${ct.id}')">✏️ Sửa</button>`});
 }
@@ -982,6 +1004,41 @@ function deleteContract(ctId){const h=STORE.house(APP.houseId);const ct=(h.contr
     bodyHTML:`<p style="margin:0">Bạn có chắc chắn xoá hợp đồng${nm?' của <b>'+esc(nm)+'</b>':''} không?<br><span class="muted" style="font-size:13px">Thao tác này không thể hoàn tác.</span></p>`,
     footHTML:`<button class="btn sec" onclick="closeModal()">↩︎ Hoàn tác</button><button class="btn danger" onclick="doDeleteContract('${ctId}')">🗑️ Chắc chắn xoá</button>`});}
 function doDeleteContract(ctId){const h=STORE.house(APP.houseId);const ct=h.contracts.find(x=>x.id===ctId);if(ct)dropImages(contractCustomerImgs(ct));h.contracts=h.contracts.filter(x=>x.id!==ctId);STORE.save();enqueueOp({entity:'contract',type:'delete',houseId:APP.houseId,id:ctId});closeModal();toast('Đã xoá hợp đồng','ok');render();}
+/* ===== Kết thúc hợp đồng (lưu lịch sử 6 tháng) ===== */
+var ENDED_KEEP_MONTHS=6;
+function isEnded(ct){return !!(ct&&ct.status==='ended');}
+function isoMonthsAgo(n){const d=new Date();d.setMonth(d.getMonth()-n);const p=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function ctMainName(ct){return ct.type==='KTX'?((ct.customer&&ct.customer.name)||''):((ct.customers||[]).map(c=>c.name).filter(Boolean).join(', '));}
+function endContractForm(ctId){
+  const h=STORE.house(APP.houseId);const ct=(h.contracts||[]).find(x=>x.id===ctId);if(!ct)return;
+  const nm=ctMainName(ct);
+  const body=`<p class="muted" style="margin-top:0">Kết thúc hợp đồng${nm?' của <b>'+esc(nm)+'</b>':''}. Hợp đồng sẽ chuyển sang mục <b>Đã kết thúc</b> (Thống kê) và tự xoá sau ${ENDED_KEEP_MONTHS} tháng.</p>
+    <div class="field"><label>Ngày kết thúc</label><input id="ecDate" type="date" value="${isoMonthsAgo(0)}"></div>
+    <div class="field"><label>Lý do kết thúc <span class="req">*</span></label>
+      <textarea id="ecReason" rows="2" style="resize:vertical" placeholder="VD: Hết hạn, chuyển đi, vi phạm nội quy…"></textarea></div>`;
+  openModal({title:'Kết thúc hợp đồng',bodyHTML:body,
+    footHTML:`<button class="btn sec" onclick="closeModal()">Huỷ</button><button class="btn danger" id="ecSave">🔚 Kết thúc</button>`,
+    onMount:(m)=>{$('#ecSave',m).onclick=()=>doEndContract(ctId);}});
+}
+function doEndContract(ctId){
+  const h=STORE.house(APP.houseId);const ct=(h.contracts||[]).find(x=>x.id===ctId);if(!ct)return;
+  const reason=($('#ecReason').value||'').trim();if(!reason){toast('Nhập lý do kết thúc','err');return;}
+  ct.status='ended';ct.endedAt=$('#ecDate').value||isoMonthsAgo(0);ct.endReason=reason;ct.endedBy=curUserName()||'';
+  STORE.save();enqueueOp({entity:'contract',type:'upsert',houseId:h.id,contract:JSON.parse(JSON.stringify(ct))});
+  closeModal();toast('Đã kết thúc hợp đồng','ok');render();
+}
+/* Tự xoá vĩnh viễn hợp đồng đã kết thúc quá hạn lưu */
+function purgeEndedContracts(){
+  const cutoff=isoMonthsAgo(ENDED_KEEP_MONTHS);let changed=false;
+  (STORE.houses()||[]).forEach(h=>{
+    (h.contracts||[]).filter(c=>isEnded(c)&&c.endedAt&&c.endedAt<cutoff).slice().forEach(ct=>{
+      try{dropImages(contractCustomerImgs(ct));}catch(e){}
+      h.contracts=h.contracts.filter(x=>x.id!==ct.id);
+      enqueueOp({entity:'contract',type:'delete',houseId:h.id,id:ct.id});changed=true;
+    });
+  });
+  if(changed)STORE.save();
+}
 
 /* ---------- CONTRACT FORM ---------- */
 function contractForm(type,id){
@@ -1015,7 +1072,7 @@ function contractForm(type,id){
         ${rooms.length?'':'<div class="hint" style="color:var(--danger)">Nhà chưa có phòng KTX. Thêm phòng KTX trong Quản lý hệ thống.</div>'}</div>
       <div class="grid2"><div class="field"><label>Từ ngày</label><input id="c_rs" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentStart))}"></div>
         <div class="field"><label>Đến ngày</label><input id="c_re" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentEnd))}"></div></div>
-      <div class="field"><label>Tiền thuê giường/tháng (₫)</label><input id="c_bed" inputmode="numeric" value="${esc(ct.pricePerBed)}"></div>
+      <div class="field"><label>Tiền thuê giường/tháng (₫)</label><input id="c_bed" data-money inputmode="numeric" value="${esc(maskThousand(ct.pricePerBed))}"></div>
       ${mgrSigBlock(h)}`;
   }else{
     body=`<span class="badge tro">Hợp đồng phòng trọ</span>
@@ -1028,11 +1085,11 @@ function contractForm(type,id){
         <div class="field"><label>Đến ngày</label><input id="c_re" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" oninput="this.value=maskDmy(this.value)" value="${esc(isoToDmy(ct.rentEnd))}"></div></div>
       <div class="sectitle">Đơn giá</div>
       <div class="grid2">
-        <div class="field"><label>Tiền thuê phòng/tháng (₫)</label><input id="c_room_price" inputmode="numeric" value="${esc(ct.pricePerRoom)}"></div>
-        <div class="field"><label>Tiền nước/người (₫)</label><input id="c_water" inputmode="numeric" value="${esc(ct.waterPerPerson)}"></div>
-        <div class="field"><label>Tiền dịch vụ/người (₫)</label><input id="c_service" inputmode="numeric" value="${esc(ct.servicePerPerson)}"></div>
-        <div class="field"><label>Tiền xe/xe (₫)</label><input id="c_vehicle" inputmode="numeric" value="${esc(ct.vehiclePerVehicle)}"></div>
-        <div class="field"><label>Tiền điện/kWh (₫)</label><input id="c_elec" inputmode="numeric" value="${esc(ct.electricPerKwh)}"></div></div>
+        <div class="field"><label>Tiền thuê phòng/tháng (₫)</label><input id="c_room_price" data-money inputmode="numeric" value="${esc(maskThousand(ct.pricePerRoom))}"></div>
+        <div class="field"><label>Tiền nước/người (₫)</label><input id="c_water" data-money inputmode="numeric" value="${esc(maskThousand(ct.waterPerPerson))}"></div>
+        <div class="field"><label>Tiền dịch vụ/người (₫)</label><input id="c_service" data-money inputmode="numeric" value="${esc(maskThousand(ct.servicePerPerson))}"></div>
+        <div class="field"><label>Tiền xe/xe (₫)</label><input id="c_vehicle" data-money inputmode="numeric" value="${esc(maskThousand(ct.vehiclePerVehicle))}"></div>
+        <div class="field"><label>Tiền điện/kWh (₫)</label><input id="c_elec" data-money inputmode="numeric" value="${esc(maskThousand(ct.electricPerKwh))}"></div></div>
       ${mgrSigBlock(h)}`;
   }
   openModal({title:(editing?'Sửa ':'Thêm ')+(type==='KTX'?'hợp đồng KTX':'hợp đồng phòng trọ'),bodyHTML:body,
@@ -1070,14 +1127,14 @@ function saveContract(type,editing){
     const dob=dmyToIso($('#c_dob').value);if(dob===null){toast('Ngày sinh không hợp lệ (DD/MM/YYYY)','err');return;}
     const c=ct.customer;c.name=name;c.dob=dob;c.phone=$('#c_phone').value.trim();c.cccd=$('#c_cccd').value.trim();c.bienso=$('#c_bienso').value.trim();
     ct.guardian={name:$('#g_name').value.trim(),role:$('#g_role').value,phone:$('#g_phone').value.trim()};
-    ct.pricePerBed=$('#c_bed').value;
+    ct.pricePerBed=unmask($('#c_bed').value);
   }else{
     const cs=ct.customers.filter(c=>c.name.trim());if(!cs.length){toast('Thêm ít nhất 1 khách hàng có tên','err');return;}
     for(let i=0;i<cs.length;i++){const c=cs[i];
       const dob=dmyToIso(c.dob);if(dob===null){toast(`Khách ${i+1}: ngày sinh không hợp lệ (DD/MM/YYYY)`,'err');return;}c.dob=dob;}
     ct.customers=cs;
-    ct.pricePerRoom=$('#c_room_price').value;ct.waterPerPerson=$('#c_water').value;ct.servicePerPerson=$('#c_service').value;
-    ct.vehiclePerVehicle=$('#c_vehicle').value;ct.electricPerKwh=$('#c_elec').value;
+    ct.pricePerRoom=unmask($('#c_room_price').value);ct.waterPerPerson=unmask($('#c_water').value);ct.servicePerPerson=unmask($('#c_service').value);
+    ct.vehiclePerVehicle=unmask($('#c_vehicle').value);ct.electricPerKwh=unmask($('#c_elec').value);
   }
   ct.managerSignature=(h.manager&&imgHas(h.manager.signature))?{...h.manager.signature}:null;
   if(!h.contracts)h.contracts=[];
@@ -1168,13 +1225,13 @@ function lastTwoWords(name){const p=String(name||'').trim().split(/\s+/).filter(
 /* Map tên đầy đủ -> tên hiển thị (rút gọn 2 chữ cuối), TRỪ khi 2 chữ cuối trùng nhau trong cùng nhà thì giữ đầy đủ */
 function shortNameMap(h){
   const names=[];
-  (h.contracts||[]).forEach(ct=>{if(ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim())names.push(ct.customer.name.trim());});
+  (h.contracts||[]).forEach(ct=>{if(!isEnded(ct)&&ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim())names.push(ct.customer.name.trim());});
   const cnt={};names.forEach(n=>{const s=lastTwoWords(n);cnt[s]=(cnt[s]||0)+1;});
   const map={};names.forEach(n=>{const s=lastTwoWords(n);map[n]=cnt[s]>1?n:s;});
   return map;
 }
 function financeTargets(h){const out=[];const sm=shortNameMap(h);
-  (h.contracts||[]).forEach(ct=>{if(ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim()){
+  (h.contracts||[]).forEach(ct=>{if(!isEnded(ct)&&ct.type==='KTX'&&ct.customer&&(ct.customer.name||'').trim()){
     const room=(h.rooms||[]).find(r=>r.id===ct.roomId);const pre=room?'['+room.name+'] ':'';const full=ct.customer.name.trim();
     out.push({type:'KTX',key:'ktx:'+ct.id,label:pre+full,short:pre+(sm[full]||full)});}});
   (h.rooms||[]).filter(r=>r.type==='TRO').forEach(r=>{const lbl='Phòng '+r.name+' (trọ)';out.push({type:'TRO',key:'tro:'+r.id,label:lbl,short:lbl});});
@@ -1847,6 +1904,7 @@ render();
     const ok=await pullFromServer();
     if(ok){render();toast('Đã tải dữ liệu mới nhất','ok');}
   }
+  try{purgeEndedContracts();render();}catch(e){}
 })();
 /* Quay lại app: gửi thao tác tồn rồi tải lại, nếu không đang nhập liệu */
 document.addEventListener('visibilitychange',function(){
